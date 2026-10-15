@@ -33,10 +33,23 @@ Résultat : `out/ma-video.<style>.mp4`.
 | `--lang` | `fr`, `en`, `auto` | `auto` |
 | `--style` | `submagic`, `hormozi`, `minimal` | `submagic` |
 | `--model` | `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` | `large-v3-turbo` |
+| `--cut-silences` | coupe les blancs entre les mots (jump cuts) | — |
+| `--min-silence` | durée minimale d'un blanc à couper, en ms | `500` |
 | `--reuse` | réutilise la transcription existante | — |
 | `--no-render` | transcrit seulement | — |
 
 Préciser `--lang` évite les erreurs de détection sur les vidéos courtes.
+
+### Couper les silences
+
+```bash
+npm run caption -- ma-video.mp4 --lang fr --cut-silences
+npm run caption -- ma-video.mp4 --cut-silences --min-silence 350   # montage plus nerveux
+```
+
+Les coupes se basent sur les timestamps des mots : tout blanc de plus de `--min-silence` ms entre deux mots est retiré, avec 100 ms de marge autour de chaque mot pour ne pas couper les syllabes. Les sous-titres sont recalés automatiquement. Résultat : `out/ma-video.<style>.cut.mp4`.
+
+Limite : un passage sans parole (démo à l'écran, musique) sera coupé aussi, puisqu'aucun mot n'y est détecté.
 
 ### Corriger une faute de transcription
 
@@ -63,6 +76,7 @@ Le Studio Remotion affiche la composition `Captioned` avec des sous-titres d'exe
 scripts/caption.ts      CLI : extraction audio → transcription → rendu
 scripts/setup.ts        installation de whisper.cpp + modèle
 src/CaptionedVideo.tsx  composition Remotion (pages de mots, mot actif, animations)
+src/segments.ts         calcul des coupes de silences et recalage des sous-titres
 src/styles.ts           presets de style
 public/fonts/           polices embarquées (OFL), rendu sans réseau
 ```

@@ -12,12 +12,16 @@ import {
   useVideoConfig,
 } from "remotion";
 import "./fonts";
+import { remapCaptions, type Segment } from "./segments";
 import { STYLES, type CaptionStyle, type StyleName } from "./styles";
 
 export type CaptionedVideoProps = {
   // Chemins relatifs au dossier public/.
   videoSrc: string;
+  // Timestamps dans le temps de la vidéo source.
   captions: Caption[];
+  // Portions gardées (silences coupés), alignées sur les frames. null = vidéo entière.
+  segments: Segment[] | null;
   style: StyleName;
   width: number;
   height: number;
@@ -25,23 +29,23 @@ export type CaptionedVideoProps = {
   durationInFrames: number;
 };
 
-export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captions, style }) => {
+export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captions, segments, style }) => {
   const { fps } = useVideoConfig();
   const s = STYLES[style];
 
   const pages = useMemo(
     () =>
       createTikTokStyleCaptions({
-        captions,
+        captions: segments ? remapCaptions(captions, segments) : captions,
         combineTokensWithinMilliseconds: s.combineWithinMs,
         breakOnSilenceAfterMilliseconds: 400,
       }).pages,
-    [captions, s.combineWithinMs],
+    [captions, segments, s.combineWithinMs],
   );
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      {videoSrc ? <OffthreadVideo src={staticFile(videoSrc)} /> : null}
+      {videoSrc ? <Footage src={staticFile(videoSrc)} segments={segments} /> : null}
       {pages.map((page, i) => {
         const next = pages[i + 1];
         const startFrame = Math.floor((page.startMs / 1000) * fps);
@@ -57,6 +61,29 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captio
         );
       })}
     </AbsoluteFill>
+  );
+};
+
+// Monte les segments bout à bout : chaque segment est un extrait de la source placé
+// juste après le précédent.
+const Footage: React.FC<{ src: string; segments: Segment[] | null }> = ({ src, segments }) => {
+  const { fps } = useVideoConfig();
+  if (!segments) return <OffthreadVideo src={src} />;
+  let outFrame = 0;
+  return (
+    <>
+      {segments.map((seg, i) => {
+        const trimBefore = Math.round((seg.fromMs / 1000) * fps);
+        const length = Math.round((seg.toMs / 1000) * fps) - trimBefore;
+        const from = outFrame;
+        outFrame += length;
+        return (
+          <Sequence key={i} from={from} durationInFrames={length}>
+            <OffthreadVideo src={src} trimBefore={trimBefore} />
+          </Sequence>
+        );
+      })}
+    </>
   );
 };
 

@@ -7,6 +7,7 @@ import sample from "./sample-captions.json";
 const defaultProps: CaptionedVideoProps = {
   videoSrc: "",
   captions: sample,
+  segments: null,
   style: "submagic",
   width: 1080,
   height: 1920,
