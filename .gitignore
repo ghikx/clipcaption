@@ -1,0 +1,6 @@
+node_modules/
+whisper.cpp/
+out/
+public/input/
+*.wav
+.DS_Store

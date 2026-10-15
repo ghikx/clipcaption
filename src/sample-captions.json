@@ -1,0 +1,128 @@
+[
+  {
+    "text": "Salut",
+    "startMs": 200,
+    "endMs": 555,
+    "timestampMs": 377.5,
+    "confidence": 1
+  },
+  {
+    "text": " à",
+    "startMs": 595,
+    "endMs": 810,
+    "timestampMs": 702.5,
+    "confidence": 1
+  },
+  {
+    "text": " tous,",
+    "startMs": 850,
+    "endMs": 1205,
+    "timestampMs": 1027.5,
+    "confidence": 1
+  },
+  {
+    "text": " aujourd’hui",
+    "startMs": 1555,
+    "endMs": 2120,
+    "timestampMs": 1837.5,
+    "confidence": 1
+  },
+  {
+    "text": " je",
+    "startMs": 2160,
+    "endMs": 2410,
+    "timestampMs": 2285,
+    "confidence": 1
+  },
+  {
+    "text": " vais",
+    "startMs": 2450,
+    "endMs": 2770,
+    "timestampMs": 2610,
+    "confidence": 1
+  },
+  {
+    "text": " vous",
+    "startMs": 2810,
+    "endMs": 3130,
+    "timestampMs": 2970,
+    "confidence": 1
+  },
+  {
+    "text": " montrer",
+    "startMs": 3170,
+    "endMs": 3595,
+    "timestampMs": 3382.5,
+    "confidence": 1
+  },
+  {
+    "text": " comment",
+    "startMs": 3635,
+    "endMs": 4060,
+    "timestampMs": 3847.5,
+    "confidence": 1
+  },
+  {
+    "text": " ajouter",
+    "startMs": 4100,
+    "endMs": 4525,
+    "timestampMs": 4312.5,
+    "confidence": 1
+  },
+  {
+    "text": " des",
+    "startMs": 4565,
+    "endMs": 4850,
+    "timestampMs": 4707.5,
+    "confidence": 1
+  },
+  {
+    "text": " sous-titres",
+    "startMs": 4890,
+    "endMs": 5455,
+    "timestampMs": 5172.5,
+    "confidence": 1
+  },
+  {
+    "text": " animés",
+    "startMs": 5495,
+    "endMs": 5885,
+    "timestampMs": 5690,
+    "confidence": 1
+  },
+  {
+    "text": " à",
+    "startMs": 5925,
+    "endMs": 6140,
+    "timestampMs": 6032.5,
+    "confidence": 1
+  },
+  {
+    "text": " vos",
+    "startMs": 6180,
+    "endMs": 6465,
+    "timestampMs": 6322.5,
+    "confidence": 1
+  },
+  {
+    "text": " vidéos",
+    "startMs": 6505,
+    "endMs": 6895,
+    "timestampMs": 6700,
+    "confidence": 1
+  },
+  {
+    "text": " en",
+    "startMs": 6935,
+    "endMs": 7185,
+    "timestampMs": 7060,
+    "confidence": 1
+  },
+  {
+    "text": " local.",
+    "startMs": 7225,
+    "endMs": 7615,
+    "timestampMs": 7420,
+    "confidence": 1
+  }
+]
