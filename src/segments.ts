@@ -27,7 +27,7 @@ export const totalDurationMs = (segments: Segment[]) =>
   segments.reduce((sum, s) => sum + (s.toMs - s.fromMs), 0);
 
 // Convertit un instant source en instant de la vidéo montée.
-const toOutputMs = (segments: Segment[], sourceMs: number): number => {
+export const toOutputMs = (segments: Segment[], sourceMs: number): number => {
   let offset = 0;
   for (const s of segments) {
     if (sourceMs < s.fromMs) return offset;

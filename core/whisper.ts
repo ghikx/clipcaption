@@ -1,8 +1,9 @@
 import path from "node:path";
 import type { WhisperModel } from "@remotion/install-whisper-cpp";
+import { ROOT } from "./paths";
 
 export const WHISPER_VERSION = "1.5.5";
-export const WHISPER_PATH = path.join(process.cwd(), "whisper.cpp");
+export const WHISPER_PATH = path.join(ROOT, "whisper.cpp");
 // Meilleur compromis vitesse/qualité multilingue (FR/EN). "small" si la machine rame.
 export const DEFAULT_MODEL: WhisperModel = "large-v3-turbo";
 

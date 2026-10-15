@@ -11,6 +11,7 @@ export type CaptionStyle = {
   fontWeight: number;
   // Taille en fraction de la largeur de la vidéo, pour rester lisible en 9:16 comme en 16:9.
   fontSizeRatio: number;
+  letterSpacing?: string;
   uppercase: boolean;
   color: string;
   // Couleur des mots déjà prononcés (effet karaoké). null = même couleur que `color`.
@@ -62,6 +63,27 @@ const base: Omit<CaptionStyle, "label" | "fontFamily" | "fontWeight"> = {
 };
 
 export const STYLES = {
+  // DA Chenek Crea : grotesque serrée blanc cassé, mot prononcé sur pastille citron,
+  // mots importants en italique fine.
+  chenek: {
+    ...base,
+    label: "Chenek : pastille citron, italique fine",
+    fontFamily: "Inter Tight",
+    fontWeight: 800,
+    fontSizeRatio: 0.078,
+    letterSpacing: "-0.035em",
+    uppercase: false,
+    color: "#F2F2EE",
+    activeColor: "#0B0B0B",
+    activeBackground: "#EEF26B",
+    activeScale: 1.04,
+    stroke: null,
+    shadow: "0 0.04em 0.3em rgba(0,0,0,0.55)",
+    emphasis: { scale: 1.12, fontWeight: 300, italic: true },
+    verticalPosition: 0.7,
+    combineWithinMs: 1200,
+    maxWords: 4,
+  },
   // Mot prononcé sur pastille colorée, le look Submagic le plus courant.
   submagic: {
     ...base,
@@ -194,5 +216,39 @@ export const STYLES = {
 } satisfies Record<string, CaptionStyle>;
 
 export type StyleName = keyof typeof STYLES;
+
+// Réglages personnalisables depuis l'interface, appliqués par-dessus le style choisi.
+export type StyleOverrides = {
+  accent?: string;
+  sizeScale?: number;
+  position?: number;
+  uppercase?: boolean;
+  maxWords?: number;
+};
+
+export const applyOverrides = (s: CaptionStyle, o: StyleOverrides | undefined): CaptionStyle => {
+  if (!o) return s;
+  const out: CaptionStyle = { ...s };
+  if (o.accent) {
+    // L'accent remplace la couleur qui porte l'identité du style : pastille si le style
+    // en a une, sinon couleur du mot prononcé et des mots importants.
+    if (s.activeBackground) out.activeBackground = o.accent;
+    else {
+      out.activeColor = o.accent;
+      if (s.spokenColor) out.spokenColor = o.accent;
+    }
+    if (s.emphasis?.color) out.emphasis = { ...s.emphasis, color: o.accent };
+    if (s.chaos) out.chaos = { ...s.chaos, palette: [o.accent, ...s.chaos.palette.slice(1)] };
+  }
+  if (o.sizeScale) out.fontSizeRatio = s.fontSizeRatio * o.sizeScale;
+  if (o.position !== undefined) out.verticalPosition = o.position;
+  if (o.uppercase !== undefined) out.uppercase = o.uppercase;
+  if (o.maxWords) {
+    out.maxWords = o.maxWords;
+    // Plus de mots par écran = fenêtre de regroupement plus longue.
+    out.combineWithinMs = o.maxWords === 1 ? 0 : Math.max(s.combineWithinMs, o.maxWords * 320);
+  }
+  return out;
+};
 
 export const isStyleName = (name: string): name is StyleName => name in STYLES;

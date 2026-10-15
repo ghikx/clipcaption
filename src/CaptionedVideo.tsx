@@ -11,30 +11,31 @@ import {
 } from "remotion";
 import "./fonts";
 import { remapCaptions, type Segment } from "./segments";
-import { STYLES, type CaptionStyle, type StyleName } from "./styles";
+import { STYLES, applyOverrides, type CaptionStyle, type StyleName, type StyleOverrides } from "./styles";
 import { paginate, type Page, type Word } from "./words";
 
 export type CaptionedVideoProps = {
-  // Chemin relatif au dossier public/. Vide = fond dégradé (aperçu sans vidéo).
+  // URL http(s) ou chemin relatif au dossier public/. Vide = fond dégradé (aperçu sans vidéo).
   videoSrc: string;
   // Timestamps dans le temps de la vidéo source.
   captions: Word[];
   // Portions gardées (silences coupés), alignées sur les frames. null = vidéo entière.
   segments: Segment[] | null;
   style: StyleName;
+  overrides?: StyleOverrides;
   width: number;
   height: number;
   fps: number;
   durationInFrames: number;
 };
 
-export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captions, segments, style }) => {
+export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captions, segments, style, overrides }) => {
   const { fps } = useVideoConfig();
-  const s: CaptionStyle = STYLES[style];
+  const s: CaptionStyle = useMemo(() => applyOverrides(STYLES[style] ?? STYLES.submagic, overrides), [style, overrides]);
 
   const pages = useMemo(
     () =>
-      paginate(segments ? remapCaptions(captions, segments) : captions, {
+      paginate(segments ? remapCaptions(captions.filter((w) => !w.cut), segments) : captions.filter((w) => !w.cut), {
         combineWithinMs: s.combineWithinMs,
         maxWords: s.maxWords,
       }),
@@ -43,7 +44,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captio
 
   return (
     <AbsoluteFill style={{ background: "linear-gradient(160deg, #1e293b 0%, #0f172a 55%, #312e81 100%)" }}>
-      {videoSrc ? <Footage src={staticFile(videoSrc)} segments={segments} /> : null}
+      {videoSrc ? <Footage src={/^https?:/.test(videoSrc) ? videoSrc : staticFile(videoSrc)} segments={segments} /> : null}
       {pages.map((page, i) => {
         const next = pages[i + 1];
         const startFrame = Math.floor((page.startMs / 1000) * fps);
@@ -65,7 +66,9 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captio
 // juste après le précédent.
 const Footage: React.FC<{ src: string; segments: Segment[] | null }> = ({ src, segments }) => {
   const { fps } = useVideoConfig();
-  if (!segments) return <OffthreadVideo src={src} />;
+  // La vidéo remplit le cadre : l'aperçu de l'interface est un proxy plus petit que la source.
+  const fill = { width: "100%", height: "100%", objectFit: "cover" as const };
+  if (!segments) return <OffthreadVideo src={src} style={fill} />;
   let outFrame = 0;
   return (
     <>
@@ -76,7 +79,7 @@ const Footage: React.FC<{ src: string; segments: Segment[] | null }> = ({ src, s
         outFrame += length;
         return (
           <Sequence key={i} from={from} durationInFrames={length}>
-            <OffthreadVideo src={src} trimBefore={trimBefore} />
+            <OffthreadVideo src={src} trimBefore={trimBefore} style={fill} />
           </Sequence>
         );
       })}
@@ -132,6 +135,7 @@ const PageView: React.FC<{ page: Page; s: CaptionStyle }> = ({ page, s }) => {
             fontFamily: s.fontFamily,
             fontWeight: s.fontWeight,
             fontSize,
+            letterSpacing: s.letterSpacing,
             lineHeight: 1.15,
             textAlign: "center",
             textTransform: s.uppercase ? "uppercase" : "none",

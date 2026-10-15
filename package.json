@@ -4,27 +4,41 @@
   "description": "Sous-titres animés façon Submagic, en local (FR/EN)",
   "scripts": {
     "setup": "tsx scripts/setup.ts",
+    "app": "vite build && tsx server/index.ts",
+    "server": "tsx server/index.ts",
+    "dev:ui": "vite",
+    "build": "vite build",
+    "mcp": "tsx core/mcp.ts",
     "caption": "tsx scripts/caption.ts",
+    "preview": "tsx scripts/preview.ts",
     "studio": "remotion studio src/index.ts",
-    "typecheck": "tsc",
-    "preview": "tsx scripts/preview.ts"
+    "typecheck": "tsc"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
     "@remotion/bundler": "4.0.535",
     "@remotion/captions": "4.0.535",
     "@remotion/cli": "4.0.535",
     "@remotion/fonts": "4.0.535",
     "@remotion/install-whisper-cpp": "4.0.535",
+    "@remotion/player": "4.0.535",
     "@remotion/renderer": "4.0.535",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "remotion": "4.0.535"
+    "remotion": "4.0.535",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vite": "^8.3.1"
   },
   "private": true,
   "type": "module"

@@ -9,6 +9,9 @@ const FONTS = [
   { family: "Anton", file: "Anton-400.woff2", weight: "400", style: "normal" },
   { family: "Instrument Serif", file: "InstrumentSerif-Italic.woff2", weight: "400", style: "italic" },
   { family: "Space Mono", file: "SpaceMono-700.woff2", weight: "700", style: "normal" },
+  { family: "Inter Tight", file: "InterTight.woff2", weight: "100 900", style: "normal" },
+  { family: "Inter Tight", file: "InterTight-Italic.woff2", weight: "100 900", style: "italic" },
+  { family: "Geist Mono", file: "GeistMono.woff2", weight: "100 900", style: "normal" },
 ] as const;
 
 for (const f of FONTS) {

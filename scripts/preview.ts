@@ -11,10 +11,12 @@ import type { CaptionedVideoProps } from "../src/CaptionedVideo";
 import sample from "../src/sample-captions.json";
 import { STYLES, type StyleName } from "../src/styles";
 import { markEmphasis } from "../src/words";
+import { ROOT } from "../core/paths";
 
 const { values } = parseArgs({ options: { video: { type: "boolean", default: false } } });
 
-const outDir = path.join("out", "styles");
+const outDir = path.join(ROOT, "out", "styles");
+const THUMBS_DIR = path.join(ROOT, "app", "public", "styles");
 fs.mkdirSync(outDir, { recursive: true });
 
 const captions = markEmphasis(sample);
@@ -22,7 +24,7 @@ const captions = markEmphasis(sample);
 const shown = captions.find((w) => w.emphasis && w.startMs > 1500) ?? captions[Math.floor(captions.length / 2)];
 const atMs = (shown.startMs + shown.endMs) / 2;
 
-const serveUrl = await bundle({ entryPoint: path.join(process.cwd(), "src/index.ts") });
+const serveUrl = await bundle({ entryPoint: path.join(ROOT, "src/index.ts") });
 const browserExecutable = process.env.REMOTION_BROWSER ?? null;
 const fps = 30;
 const lastMs = captions[captions.length - 1].endMs;
@@ -50,6 +52,15 @@ for (const style of Object.keys(STYLES) as StyleName[]) {
     browserExecutable,
   });
   stills.push(still);
+  // Vignette 16:9 centrée sur les sous-titres, pour l'interface web.
+  const centerY = Math.round(1920 * STYLES[style].verticalPosition);
+  const top = Math.max(0, Math.min(1920 - 608, centerY - 304));
+  fs.mkdirSync(THUMBS_DIR, { recursive: true });
+  execFileSync("ffmpeg", [
+    "-y", "-loglevel", "error", "-i", still,
+    "-vf", `crop=1080:608:0:${top},scale=480:-2`, "-q:v", "3",
+    path.join(THUMBS_DIR, `${style}.jpg`),
+  ]);
   console.log(`${style.padEnd(11)} ${STYLES[style].label}`);
   if (values.video) {
     await renderMedia({

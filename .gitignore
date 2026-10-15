@@ -4,3 +4,5 @@ out/
 public/input/
 *.wav
 .DS_Store
+workspace/
+dist/
