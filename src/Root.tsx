@@ -1,12 +1,13 @@
 import { Composition } from "remotion";
 import { CaptionedVideo, type CaptionedVideoProps } from "./CaptionedVideo";
 import sample from "./sample-captions.json";
+import { markEmphasis } from "./words";
 
 // Valeurs utilisées par le Studio sans vidéo ; le script de rendu les remplace
 // par les métadonnées réelles de la vidéo via les inputProps.
 const defaultProps: CaptionedVideoProps = {
   videoSrc: "",
-  captions: sample,
+  captions: markEmphasis(sample),
   segments: null,
   style: "submagic",
   width: 1080,

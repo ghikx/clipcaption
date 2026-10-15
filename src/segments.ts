@@ -37,7 +37,7 @@ const toOutputMs = (segments: Segment[], sourceMs: number): number => {
   return offset;
 };
 
-export const remapCaptions = (captions: Caption[], segments: Segment[]): Caption[] =>
+export const remapCaptions = <T extends Caption>(captions: T[], segments: Segment[]): T[] =>
   captions.map((c) => ({
     ...c,
     startMs: toOutputMs(segments, c.startMs),

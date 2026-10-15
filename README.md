@@ -3,7 +3,7 @@
 Sous-titres animés façon Submagic, 100 % en local, en français et en anglais.
 
 - **Transcription** : [whisper.cpp](https://github.com/ggerganov/whisper.cpp), timestamps mot par mot, sans API ni clé.
-- **Rendu** : [Remotion](https://www.remotion.dev) (React → MP4), avec 3 styles : `submagic`, `hormozi`, `minimal`.
+- **Rendu** : [Remotion](https://www.remotion.dev) (React → MP4), 9 styles de sous-titres.
 
 ## Prérequis
 
@@ -31,7 +31,7 @@ Résultat : `out/ma-video.<style>.mp4`.
 | Option | Valeurs | Défaut |
 |---|---|---|
 | `--lang` | `fr`, `en`, `auto` | `auto` |
-| `--style` | `submagic`, `hormozi`, `minimal` | `submagic` |
+| `--style` | voir [Styles](#styles) | `submagic` |
 | `--model` | `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` | `large-v3-turbo` |
 | `--cut-silences` | coupe les blancs entre les mots (jump cuts) | — |
 | `--min-silence` | durée minimale d'un blanc à couper, en ms | `500` |
@@ -39,6 +39,31 @@ Résultat : `out/ma-video.<style>.mp4`.
 | `--no-render` | transcrit seulement | — |
 
 Préciser `--lang` évite les erreurs de détection sur les vidéos courtes.
+
+## Styles
+
+| Style | Rendu |
+|---|---|
+| `submagic` | Groupe de mots, pastille violette sur le mot prononcé |
+| `hormozi` | Texte condensé, mot prononcé en jaune |
+| `oneword` | Un seul mot à l'écran, blanc, sobre |
+| `karaoke` | Les mots se remplissent de couleur au fil de la voix |
+| `keyword` | Phrase en blanc, mots importants plus gros et en vert |
+| `aesthetic` | Sans-serif fin + serif italique sur le mot important |
+| `chaos` | Les mots surgissent un par un, tailles, angles, couleurs et polices variés |
+| `typewriter` | Lettres qui s'écrivent au rythme de la voix, sur fond noir |
+| `podcast` | Bloc de texte sur fond sombre, mot prononcé en jaune |
+
+Voir tous les styles sans vidéo :
+
+```bash
+npm run preview              # images dans out/styles/, planche complète : out/styles/catalogue.png
+npm run preview -- --video   # + une démo MP4 par style
+```
+
+### Mots importants
+
+`keyword`, `aesthetic` et `chaos` mettent en avant certains mots. Ils sont choisis automatiquement, en local : chiffres, mots longs hors mots-outils (FR + EN), espacés d'au moins 1,2 s. Pour changer le choix, passe `"emphasis"` à `true` ou `false` sur le mot dans `public/input/<video>.captions.json`, puis relance avec `--reuse`.
 
 ### Couper les silences
 
@@ -78,6 +103,8 @@ scripts/setup.ts        installation de whisper.cpp + modèle
 src/CaptionedVideo.tsx  composition Remotion (pages de mots, mot actif, animations)
 src/segments.ts         calcul des coupes de silences et recalage des sous-titres
 src/styles.ts           presets de style
+src/words.ts            regroupement des mots en écrans, détection des mots importants
+scripts/preview.ts      aperçu du catalogue de styles
 public/fonts/           polices embarquées (OFL), rendu sans réseau
 ```
 

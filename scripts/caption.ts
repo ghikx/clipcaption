@@ -1,4 +1,4 @@
-// Usage : npm run caption -- <video> [--lang fr|en|auto] [--style submagic|hormozi|minimal]
+// Usage : npm run caption -- <video> [--lang fr|en|auto] [--style <style>]
 //                                  [--model large-v3-turbo] [--reuse] [--no-render]
 //                                  [--cut-silences] [--min-silence 500]
 //
@@ -11,7 +11,6 @@
 //
 // --cut-silences supprime les blancs de plus de --min-silence ms entre deux mots
 // (jump cuts), en se basant sur les timestamps de la transcription.
-import type { Caption } from "@remotion/captions";
 import { bundle } from "@remotion/bundler";
 import { transcribe, toCaptions } from "@remotion/install-whisper-cpp";
 import { renderMedia, selectComposition } from "@remotion/renderer";
@@ -23,6 +22,7 @@ import { parseArgs } from "node:util";
 import type { CaptionedVideoProps } from "../src/CaptionedVideo";
 import { computeSegments, snapToFrames, totalDurationMs, type Segment } from "../src/segments";
 import { STYLES, isStyleName } from "../src/styles";
+import { markEmphasis, type Word } from "../src/words";
 import { WHISPER_PATH, WHISPER_VERSION, parseModel } from "./whisper";
 
 const { values, positionals } = parseArgs({
@@ -40,7 +40,7 @@ const { values, positionals } = parseArgs({
 
 const input = positionals[0];
 if (!input || !fs.existsSync(input)) {
-  console.error("Usage : npm run caption -- <video> [--lang fr|en|auto] [--style submagic|hormozi|minimal]");
+  console.error(`Usage : npm run caption -- <video> [--lang fr|en|auto] [--style ${Object.keys(STYLES).join("|")}]`);
   process.exit(1);
 }
 if (!["fr", "en", "auto"].includes(values.lang)) {
@@ -99,8 +99,8 @@ const probe = (): Pick<CaptionedVideoProps, "width" | "height" | "fps" | "durati
 // whisper.cpp peut couper un mot en plusieurs tokens (" aujourd" + "'hui") : un token
 // qui ne commence pas par une espace est recollé au précédent. Les annotations
 // comme [Musique] ou (rires) sont retirées.
-const cleanCaptions = (captions: Caption[]): Caption[] => {
-  const out: Caption[] = [];
+const cleanCaptions = (captions: Word[]): Word[] => {
+  const out: Word[] = [];
   for (const c of captions) {
     const text = c.text;
     if (!text.trim() || /^\s*[[(].*[\])]\s*$/.test(text)) continue;
@@ -115,7 +115,7 @@ const cleanCaptions = (captions: Caption[]): Caption[] => {
   return out;
 };
 
-const transcribeVideo = async (): Promise<Caption[]> => {
+const transcribeVideo = async (): Promise<Word[]> => {
   const model = parseModel(values.model);
   const wav = path.join(os.tmpdir(), `${name}-${Date.now()}.wav`);
   // whisper.cpp exige du WAV 16 kHz mono.
@@ -135,16 +135,21 @@ const transcribeVideo = async (): Promise<Caption[]> => {
       onProgress: (p) => process.stdout.write(`\r  ${Math.round(p * 100)} %`),
     });
     process.stdout.write("\n");
-    return cleanCaptions(toCaptions({ whisperCppOutput }).captions);
+    return markEmphasis(cleanCaptions(toCaptions({ whisperCppOutput }).captions));
   } finally {
     fs.rmSync(wav, { force: true });
   }
 };
 
-let captions: Caption[];
+let captions: Word[];
 if (values.reuse) {
   if (!fs.existsSync(captionsPath)) throw new Error(`--reuse : ${captionsPath} introuvable, lance d'abord sans --reuse`);
   captions = JSON.parse(fs.readFileSync(captionsPath, "utf8"));
+  // JSON produit avant l'ajout des mots importants : on les calcule une fois.
+  if (!captions.some((w) => "emphasis" in w)) {
+    captions = markEmphasis(captions);
+    fs.writeFileSync(captionsPath, JSON.stringify(captions, null, 2) + "\n");
+  }
   console.log(`Sous-titres réutilisés : ${captionsPath}`);
 } else {
   captions = await transcribeVideo();

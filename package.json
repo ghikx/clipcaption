@@ -6,7 +6,8 @@
     "setup": "tsx scripts/setup.ts",
     "caption": "tsx scripts/caption.ts",
     "studio": "remotion studio src/index.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "preview": "tsx scripts/preview.ts"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.535",
