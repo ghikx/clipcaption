@@ -6,3 +6,4 @@ public/input/
 .DS_Store
 workspace/
 dist/
+.whisper-models/

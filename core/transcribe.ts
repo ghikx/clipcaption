@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { markEmphasis, type Word } from "../src/words";
 import { extractWav } from "./media";
-import { DEFAULT_MODEL, WHISPER_PATH, WHISPER_VERSION } from "./whisper";
+import { DEFAULT_MODEL, WHISPER_BINARY, WHISPER_PATH, WHISPER_VERSION, modelFile } from "./whisper";
 import type { WhisperModel } from "@remotion/install-whisper-cpp";
 
 export type Language = "fr" | "en" | "auto";
@@ -29,18 +29,18 @@ export const cleanWords = (captions: Word[]): Word[] => {
 };
 
 export const whisperStatus = (model: WhisperModel = DEFAULT_MODEL) => ({
-  installed: fs.existsSync(path.join(WHISPER_PATH, process.platform === "win32" ? "main.exe" : "main")),
+  installed: fs.existsSync(WHISPER_BINARY),
   model,
-  modelReady: fs.existsSync(path.join(WHISPER_PATH, `ggml-${model}.bin`)),
+  modelReady: fs.existsSync(modelFile(model)),
 });
 
 export const assertWhisperInstalled = (model: WhisperModel) => {
-  // Mêmes chemins que @remotion/install-whisper-cpp (non exportés par le paquet).
-  const binary = path.join(WHISPER_PATH, process.platform === "win32" ? "main.exe" : "main");
-  if (!fs.existsSync(binary)) {
-    throw new Error("whisper.cpp n'est pas installé : lance `npm run setup` dans le dossier clipcaption.");
+  if (!fs.existsSync(WHISPER_BINARY)) {
+    throw new Error(
+      `whisper.cpp ${WHISPER_VERSION} n'est pas installé (ou une ancienne version l'est) : lance \`npm run setup\` dans le dossier clipcaption.`,
+    );
   }
-  if (!fs.existsSync(path.join(WHISPER_PATH, `ggml-${model}.bin`))) {
+  if (!fs.existsSync(modelFile(model))) {
     throw new Error(`Modèle ${model} absent : lance \`npm run setup -- --model ${model}\`.`);
   }
 };
@@ -60,7 +60,8 @@ export const transcribeFile = async (
       model,
       modelFolder: WHISPER_PATH,
       tokenLevelTimestamps: true,
-      splitOnWord: true,
+      // Pas de splitOnWord : la bibliothèque passe « --split-on-word true » et whisper prend
+      // « true » pour un fichier d'entrée. cleanWords recolle déjà les morceaux de mots.
       language: lang,
       printOutput: false,
       onProgress,
