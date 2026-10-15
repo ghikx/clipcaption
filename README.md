@@ -212,6 +212,10 @@ Les mots importants sont choisis automatiquement, en local : chiffres, mots long
 
 L'outil tourne sur ta machine : whisper.cpp (binaire natif + modèle de 1,6 Go), ffmpeg, Chrome pour le rendu, fichiers sur disque et traitements de plusieurs minutes. Les fonctions Vercel sont limitées en taille, en durée et sans disque persistant. Une version en ligne demanderait de remplacer la transcription par une API (Deepgram, AssemblyAI), le rendu par Remotion Lambda sur AWS et le stockage par un service de fichiers.
 
+## Dépannage
+
+- **Export en erreur « Target closed »** : le Chrome qui fabrique la vidéo a planté (mémoire ou carte graphique). L'export se relance automatiquement une fois en mode sûr (un seul onglet, rendu logiciel). Si ça arrive souvent, lance toujours en mode sûr : `CLIPCAPTION_SAFE_RENDER=1 ./"Lancer clipcaption.command"`, ou limite le parallélisme avec `CLIPCAPTION_CONCURRENCY=2`.
+
 ## Limites connues
 
 - La coupe des silences retire aussi les passages sans parole (démo à l'écran, musique), puisqu'aucun mot n'y est détecté.

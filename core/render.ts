@@ -96,22 +96,45 @@ export const renderEdit = async (o: RenderOptions) => {
     const browserExecutable = process.env.REMOTION_BROWSER ?? null;
     const composition = await selectComposition({ serveUrl, id: "Captioned", inputProps, browserExecutable });
     fs.mkdirSync(path.dirname(o.outPath), { recursive: true });
-    await renderMedia({
-      serveUrl,
-      composition,
-      inputProps,
-      codec: "h264",
-      // Qualité : par défaut Remotion capture les images en JPEG qualité 80 (artefacts
-      // visibles sur les détails fins et autour du texte). 100 = quasi sans perte.
-      jpegQuality: 100,
-      // CRF 17 (défaut 18) : un peu plus fidèle à la source, fichier un peu plus lourd.
-      crf: 17,
-      // bt709 = espace colorimétrique standard de la vidéo : évite un décalage de couleurs.
-      colorSpace: "bt709",
-      outputLocation: o.outPath,
-      browserExecutable,
-      onProgress: ({ progress }) => o.onProgress?.(progress),
-    });
+    const render = (safe: boolean) =>
+      renderMedia({
+        serveUrl,
+        composition,
+        inputProps,
+        codec: "h264",
+        // Qualité : par défaut Remotion capture les images en JPEG qualité 80 (artefacts
+        // visibles sur les détails fins et autour du texte). 100 = quasi sans perte.
+        jpegQuality: 100,
+        // CRF 17 (défaut 18) : un peu plus fidèle à la source, fichier un peu plus lourd.
+        crf: 17,
+        // bt709 = espace colorimétrique standard de la vidéo : évite un décalage de couleurs.
+        colorSpace: "bt709",
+        // Cache des images de la vidéo source limité, pour ne pas saturer la mémoire.
+        offthreadVideoCacheSizeInBytes: 512 * 1024 * 1024,
+        // Mode sûr après un plantage de Chrome : un seul onglet, rendu graphique logiciel.
+        ...(safe
+          ? { concurrency: 1, chromiumOptions: { gl: "swangle" as const } }
+          : process.env.CLIPCAPTION_CONCURRENCY
+            ? { concurrency: Number(process.env.CLIPCAPTION_CONCURRENCY) }
+            : {}),
+        outputLocation: o.outPath,
+        browserExecutable,
+        onProgress: ({ progress }) => o.onProgress?.(progress),
+      });
+    // CLIPCAPTION_SAFE_RENDER=1 : toujours en mode sûr (Mac qui plante souvent).
+    const forceSafe = process.env.CLIPCAPTION_SAFE_RENDER === "1";
+    try {
+      await render(forceSafe);
+    } catch (e) {
+      if (forceSafe) throw e;
+      // « Target closed » & co : le Chrome du rendu a planté (mémoire, carte graphique).
+      // On relance une fois en mode sûr, plus lent mais bien plus stable.
+      const message = e instanceof Error ? e.message : String(e);
+      if (!/target closed|session closed|crash|protocol error|browser has disconnected|page crashed/i.test(message)) throw e;
+      console.error(`[rendu] Chrome a planté (${message.split("\n")[0]}). Nouvel essai en mode sûr…`);
+      o.onProgress?.(0);
+      await render(true);
+    }
     return { outPath: o.outPath, durationMs: (edit.durationInFrames / o.media.fps) * 1000 };
   } finally {
     media.close();
