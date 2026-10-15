@@ -12,7 +12,8 @@
     "caption": "tsx scripts/caption.ts",
     "preview": "tsx scripts/preview.ts",
     "studio": "remotion studio src/index.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "lot": "tsx scripts/lot.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",

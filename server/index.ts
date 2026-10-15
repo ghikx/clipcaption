@@ -5,7 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import multer from "multer";
-import { downloadFromDrive } from "../core/drive";
+import { downloadFromDrive, driveRoots } from "../core/drive";
+import { expandHome, listConfigs, saveConfig } from "../core/configs";
 import { queueRender, queueTranscription, recoverStaleJobs } from "../core/jobs";
 import { PUBLIC_DIR, ROOT, UI_PORT } from "../core/paths";
 import {
@@ -103,6 +104,21 @@ app.get("/api/styles/:id/thumb", (req, res) => {
   res.sendFile(file);
 });
 
+app.get("/api/configs", (_req, res) => {
+  res.json(listConfigs());
+});
+
+app.post(
+  "/api/configs",
+  route((req, res) => {
+    res.status(201).json(saveConfig(req.body));
+  }),
+);
+
+app.get("/api/drive-roots", (_req, res) => {
+  res.json(driveRoots());
+});
+
 app.get("/api/fonts", (_req, res) => {
   res.json(fontFamilies());
 });
@@ -163,6 +179,8 @@ app.patch(
     if (typeof b.name === "string" && b.name.trim()) p.name = b.name.trim().slice(0, 120);
     if (typeof b.style === "string" && styleExists(b.style)) p.style = b.style;
     if (b.overrides && typeof b.overrides === "object") p.overrides = b.overrides;
+    if (b.outputDir === null || b.outputDir === "") delete p.outputDir;
+    else if (typeof b.outputDir === "string") p.outputDir = path.resolve(expandHome(b.outputDir.trim()));
     if (b.settings && typeof b.settings === "object") {
       p.settings = {
         cutSilences: Boolean(b.settings.cutSilences),

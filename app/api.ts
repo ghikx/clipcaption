@@ -38,6 +38,7 @@ export const api = {
     send("POST", "/api/styles", { name, base, changes }).then(json<{ id: string }>),
   updateStyle: (id: string, name: string, changes: CaptionStyle) => send("PUT", `/api/styles/${id}`, { name, changes }).then(json<{ id: string }>),
   deleteStyle: (id: string) => send("DELETE", `/api/styles/${id}`).then(json<void>),
+  saveConfig: (config: Record<string, unknown>) => send("POST", "/api/configs", config).then(json<unknown>),
   importDrive: (url: string, lang: string) => send("POST", "/api/projects/drive", { url, lang }).then(json<Project>),
 
   // XHR plutôt que fetch : seul XHR donne la progression de l'envoi.

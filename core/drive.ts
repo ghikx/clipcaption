@@ -34,3 +34,17 @@ export const downloadFromDrive = async (url: string): Promise<{ file: string; na
   await pipeline(Readable.fromWeb(res.body as ReadableStream), fs.createWriteStream(file));
   return { file, name: path.basename(name, path.extname(name)) };
 };
+
+// Dossiers Google Drive pour ordinateur (macOS) : ~/Library/CloudStorage/GoogleDrive-<compte>/
+// puis « Mon Drive » / « My Drive » (selon la langue du système), « Drive partagés »…
+export const driveRoots = () => {
+  const base = path.join(os.homedir(), "Library", "CloudStorage");
+  if (!fs.existsSync(base)) return [];
+  return fs
+    .readdirSync(base)
+    .filter((d) => d.startsWith("GoogleDrive"))
+    .flatMap((d) => {
+      const root = path.join(base, d);
+      return fs.readdirSync(root).filter((s) => !s.startsWith(".")).map((s) => path.join(root, s));
+    });
+};

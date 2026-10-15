@@ -593,7 +593,29 @@ export const Editor = ({ id }: { id: string }) => {
             />
           )}
 
-          {tab === "export" && <ExportTab project={project} canExport={!!words && !busy} onExport={exportNow} outMs={(edit.durationInFrames / project.media.fps) * 1000} />}
+          {tab === "export" && (
+            <ExportTab
+              project={project}
+              canExport={!!words && !busy}
+              onExport={exportNow}
+              outMs={(edit.durationInFrames / project.media.fps) * 1000}
+              onOutputDir={async (dir) => {
+                const p = await api.update(id, { outputDir: dir ?? "" } as Partial<Project>);
+                setProject((cur) => (cur ? { ...cur, outputDir: p.outputDir } : p));
+              }}
+              onSaveConfig={async (configName) => {
+                await api.saveConfig({
+                  name: configName,
+                  style,
+                  lang: project.lang === "auto" ? "fr" : project.lang,
+                  cutSilences: settings.cutSilences,
+                  minSilenceMs: settings.minSilenceMs,
+                  ...overrides,
+                  outputDir: project.outputDir,
+                });
+              }}
+            />
+          )}
         </aside>
       </div>
     </div>
@@ -910,16 +932,75 @@ const MontageTab = ({
   );
 };
 
+// Dossier de sortie : chaque export y est copié (ex. dossier Google Drive pour ordinateur,
+// synchronisé automatiquement en ligne).
+const OutputFolder = ({ value, onChange }: { value?: string; onChange: (dir: string | null) => Promise<void> }) => {
+  const [draft, setDraft] = useState(value ?? "");
+  const [roots, setRoots] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/drive-roots").then((r) => r.json()).then(setRoots).catch(() => {});
+  }, []);
+  useEffect(() => setDraft(value ?? ""), [value]);
+  const apply = async (dir: string | null) => {
+    setError(null);
+    try {
+      await onChange(dir);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <div className="field-group">
+      <span className="mono label small">Copier chaque export dans</span>
+      <div className="drive-row">
+        <input
+          className="field small-field"
+          placeholder="Chemin d'un dossier (ex. ton Google Drive)"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => draft !== (value ?? "") && apply(draft || null)}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        />
+        {value && (
+          <button className="btn small ghost" onClick={() => apply(null)} title="Ne plus copier">
+            ✕
+          </button>
+        )}
+      </div>
+      {!value && roots.length > 0 && (
+        <div className="row-gap">
+          {roots.map((r) => (
+            <button key={r} className="chip" onClick={() => apply(`${r}/Sous-titrées`)}>
+              Drive : {r.split("/").pop()}/Sous-titrées
+            </button>
+          ))}
+        </div>
+      )}
+      {!value && roots.length === 0 && (
+        <p className="muted small">
+          Avec Google Drive pour ordinateur, choisis un dossier de ton Drive : les vidéos finies y seront envoyées automatiquement.
+        </p>
+      )}
+      {error && <p className="error-text small">{error}</p>}
+    </div>
+  );
+};
+
 const ExportTab = ({
   project,
   canExport,
   onExport,
   outMs,
+  onOutputDir,
+  onSaveConfig,
 }: {
   project: Project;
   canExport: boolean;
   onExport: () => void;
   outMs: number;
+  onOutputDir: (dir: string | null) => Promise<void>;
+  onSaveConfig: (name: string) => Promise<void>;
 }) => (
   <div className="tab-body">
     <div className="export-hero">
@@ -940,6 +1021,23 @@ const ExportTab = ({
         </button>
       )}
     </div>
+    <OutputFolder value={project.outputDir} onChange={onOutputDir} />
+    <button
+      className="btn small"
+      onClick={async () => {
+        const name = prompt("Nom de la configuration (ex. tiktok) : style, langue, coupes, ajustements et dossier de sortie actuels.");
+        if (!name) return;
+        try {
+          await onSaveConfig(name);
+          alert(`Configuration « ${name} » enregistrée. Utilise-la avec Claude (« config ${name} ») ou npm run lot -- <dossier> --config ${name}.`);
+        } catch (e) {
+          alert((e as Error).message);
+        }
+      }}
+    >
+      Enregistrer ces réglages comme configuration
+    </button>
+    <div className="divider" />
     <span className="mono label small">Exports</span>
     {project.renders.length === 0 && <p className="muted small">Aucun export pour l'instant.</p>}
     <ul className="renders">
@@ -950,6 +1048,7 @@ const ExportTab = ({
             <span className="mono muted small">
               {new Date(r.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })} · {formatTime(r.durationMs)}
             </span>
+            {r.copiedTo && <span className="muted small">Copié dans {r.copiedTo.split("/").slice(-2).join("/")}</span>}
           </div>
           <div className="row-gap">
             <a className="chip" href={mediaUrl(project.id, r.file)} target="_blank" rel="noreferrer">

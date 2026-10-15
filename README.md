@@ -65,7 +65,39 @@ Dans l'onglet Style, **+ Créer un style** part du style actuel ; le crayon ✎ 
 
 Les styles perso sont enregistrés dans `workspace/styles/` et utilisables partout (interface, CLI, Claude).
 
-### Google Drive
+### Google Drive et traitement par lot
+
+La méthode recommandée : installe **[Google Drive pour ordinateur](https://www.google.com/drive/download/)**. Ton Drive apparaît comme un dossier sur le Mac et se synchronise tout seul : clipcaption lit les vidéos dans un dossier Drive et y dépose les MP4 finis, sans partage public ni limite de taille.
+
+**Avec Claude** : *« Sous-titre toutes les vidéos de mon dossier Drive "À sous-titrer" avec la config chenek »*. Claude trouve ton Drive (`list_videos`), lance le lot (`caption_folder`) et suit l'avancement (`get_batch`). Les fichiers finis s'appellent `<nom>.sous-titres.mp4` et arrivent dans `À sous-titrer/Sous-titrées` (ou le dossier de ton choix).
+
+**Sans Claude** :
+
+```bash
+npm run lot -- ~/Library/CloudStorage/GoogleDrive-*/"Mon Drive"/"À sous-titrer"
+npm run lot -- <dossier> --config chenek --out <dossier de sortie>
+npm run lot -- <dossier> --watch     # surveille le dossier : chaque nouvelle vidéo est traitée
+```
+
+Astuce : glisse un dossier du Finder dans le Terminal pour écrire son chemin.
+
+Les vidéos déjà faites (fichier `.sous-titres.mp4` présent dans la sortie) sont sautées : relancer un lot ne refait rien.
+
+**Dans l'interface** (onglet Export) : « Copier chaque export dans » envoie chaque export vers un dossier, ton Drive est proposé automatiquement.
+
+### Configurations
+
+Une configuration regroupe style, langue, coupe des silences, ajustements (accent, taille, position, mots par écran) et dossier de sortie. La configuration `chenek` est fournie par défaut : style chenek, FR, coupe des silences > 400 ms, accent citron, taille 65 %, position 65 %, 2 mots par écran.
+
+```bash
+npm run lot -- --configs                                        # lister
+npm run lot -- --save chenek --no-cut-silences                  # modifier une config
+npm run lot -- --save tiktok --style beast --min-silence 300 --cut-silences   # en créer une
+```
+
+Aussi depuis l'interface (onglet Export, « Enregistrer ces réglages comme configuration ») ou Claude (`save_config`).
+
+### Lien de partage Drive
 
 L'import par lien marche pour un fichier partagé en « Tous les utilisateurs disposant du lien ». Pour un fichier privé, deux options :
 
@@ -108,6 +140,9 @@ Ensuite, demande simplement :
 | `render_project` | Exporte avec les réglages actuels |
 | `get_project` / `list_projects` | Suivi des projets |
 | `transcribe_again` | Retranscrit, par exemple dans une autre langue |
+| `caption_folder` / `get_batch` | Sous-titre tout un dossier (ex. Google Drive) en arrière-plan / suit l'avancement |
+| `list_videos` | Vidéos d'un dossier et celles déjà faites ; sans dossier, trouve ton Google Drive |
+| `list_configs` / `save_config` | Configurations enregistrées |
 | `list_styles` / `get_style` | Styles disponibles et leur définition complète |
 | `create_style` / `update_style` | Crée ou modifie un style perso ; rend une image d'aperçu que Claude voit |
 | `preview_style` | Image d'un style (ou d'une variante non enregistrée), sur un projet ou une phrase d'exemple |

@@ -11,7 +11,7 @@ import type { Language } from "./transcribe";
 
 export type ProjectStatus = "uploaded" | "transcribing" | "ready" | "rendering" | "error";
 
-export type RenderInfo = { file: string; style: StyleName; createdAt: string; durationMs: number };
+export type RenderInfo = { file: string; style: StyleName; createdAt: string; durationMs: number; copiedTo?: string };
 
 export type Project = {
   id: string;
@@ -33,6 +33,10 @@ export type Project = {
   overrides: StyleOverrides;
   settings: EditSettings;
   renders: RenderInfo[];
+  // Dossier où copier chaque export (ex. un dossier Google Drive synchronisé).
+  outputDir?: string;
+  // Nom du fichier copié dans outputDir (sinon « <nom du projet>.sous-titres.mp4 »).
+  outputName?: string;
 };
 
 export const projectDir = (id: string) => {

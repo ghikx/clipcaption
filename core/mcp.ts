@@ -15,9 +15,11 @@ import { allStyles, deleteCustomStyle, getCustomStyle, resolveStyle, saveCustomS
 import { ensureFonts } from "./fonts";
 import { sourcePath } from "./projects";
 import type { CaptionStyle, StyleOverrides } from "../src/styles";
-import { downloadFromDrive, isDriveUrl } from "./drive";
+import { downloadFromDrive, driveRoots, isDriveUrl } from "./drive";
 import { queueRender, queueTranscription, recoverStaleJobs, styleList } from "./jobs";
 import { UI_PORT } from "./paths";
+import { defaultOutputDir, getBatch, newBatchId, outputNameFor, runBatch, scanFolder } from "./batch";
+import { configSchema, configToProject, expandHome, getConfig, listConfigs, saveConfig, type Config } from "./configs";
 import { assertWhisperInstalled } from "./transcribe";
 import { DEFAULT_MODEL } from "./whisper";
 import type { WhisperModel } from "@remotion/install-whisper-cpp";
@@ -194,28 +196,46 @@ server.registerTool(
   {
     title: "Sous-titrer une vidéo",
     description:
-      "Transcrit une vidéo (FR/EN) et l'exporte avec des sous-titres animés. Accepte un chemin local ou un lien de partage Google Drive. " +
-      "Rend le chemin du MP4 final. Si le traitement dépasse ~50 s, renvoie le statut : appeler ensuite get_project pour suivre.",
+      "Transcrit une vidéo (FR/EN) et l'exporte avec des sous-titres animés. Accepte un chemin local (y compris un dossier Google Drive " +
+      "pour ordinateur) ou un lien de partage Google Drive. Une configuration enregistrée (list_configs) fixe style, langue, coupes et " +
+      "dossier de sortie ; les autres paramètres la complètent. Si output_dir est donné, le MP4 fini y est copié. " +
+      "Si le traitement dépasse ~50 s, renvoie le statut : appeler ensuite get_project pour suivre.",
     inputSchema: {
       source: z.string().describe("Chemin absolu d'un fichier vidéo, ou lien de partage Google Drive"),
-      style: styleName.optional().describe("Style de sous-titres (défaut : chenek)"),
-      language: z.enum(["fr", "en", "auto"]).optional().describe("Langue parlée (défaut : auto)"),
-      cut_silences: z.boolean().optional().describe("Couper les blancs entre les mots (défaut : false)"),
-      min_silence_ms: z.number().int().min(100).max(3000).optional().describe("Durée minimale d'un blanc à couper (défaut : 500)"),
+      config: z.string().optional().describe("Configuration enregistrée, ex. chenek"),
+      style: styleName.optional().describe("Style de sous-titres (défaut : celui de la config, sinon chenek)"),
+      language: z.enum(["fr", "en", "auto"]).optional().describe("Langue parlée"),
+      cut_silences: z.boolean().optional().describe("Couper les blancs entre les mots"),
+      min_silence_ms: z.number().int().min(100).max(3000).optional().describe("Durée minimale d'un blanc à couper"),
       accent: z.string().optional().describe("Couleur d'accent CSS, ex. #EEF26B"),
+      output_dir: z.string().optional().describe("Dossier où copier le MP4 fini (ex. dossier Google Drive)"),
     },
   },
-  async ({ source, style, language, cut_silences, min_silence_ms, accent }) => {
-    checkStyle(style);
+  async ({ source, config, style, language, cut_silences, min_silence_ms, accent, output_dir }) => {
+    const base = config ? configToProject(getConfig(config)) : null;
+    checkStyle(style ?? base?.style);
     // Vérifié avant de créer le projet, pour ne pas laisser de projet en erreur.
     assertWhisperInstalled((process.env.CLIPCAPTION_MODEL as WhisperModel) || DEFAULT_MODEL);
-    let file = source;
+    let file = expandHome(source);
     let name: string | undefined;
     if (isDriveUrl(source)) ({ file, name } = await downloadFromDrive(source));
-    else if (!fs.existsSync(source)) throw new Error(`Fichier introuvable : ${source}`);
-    const project = await createProject(file, { name, lang: language ?? "auto", style, move: isDriveUrl(source) });
-    project.settings = { cutSilences: cut_silences ?? false, minSilenceMs: min_silence_ms ?? 500 };
-    if (accent) project.overrides = { accent };
+    else if (!fs.existsSync(file)) throw new Error(`Fichier introuvable : ${file}`);
+    const project = await createProject(file, {
+      name,
+      lang: language ?? base?.lang ?? "auto",
+      style: style ?? base?.style,
+      move: isDriveUrl(source),
+    });
+    project.settings = {
+      cutSilences: cut_silences ?? base?.settings.cutSilences ?? false,
+      minSilenceMs: min_silence_ms ?? base?.settings.minSilenceMs ?? 500,
+    };
+    project.overrides = { ...(base?.overrides ?? {}), ...(accent ? { accent } : {}) };
+    const out = output_dir ?? base?.outputDir;
+    if (out) {
+      project.outputDir = path.resolve(expandHome(out));
+      project.outputName = outputNameFor(name ?? file);
+    }
     saveProject(project);
 
     const pipeline = queueTranscription(project.id).then(() => queueRender(project.id));
@@ -225,8 +245,124 @@ server.registerTool(
     if (result === "pending") {
       return text({ ...summary(p), note: "Traitement en cours. Appelle get_project avec ce project_id pour suivre." });
     }
-    return text({ ...summary(p), output: result.absolutePath });
+    return text({ ...summary(p), output: result.copiedTo ?? result.absolutePath });
   },
+);
+
+server.registerTool(
+  "list_videos",
+  {
+    title: "Vidéos d'un dossier",
+    description:
+      "Liste les vidéos d'un dossier et indique celles déjà sous-titrées (fichier .sous-titres.mp4 présent dans le dossier de sortie). " +
+      "Sans dossier : rend les racines Google Drive pour ordinateur trouvées sur le Mac et leurs sous-dossiers.",
+    inputSchema: {
+      folder: z.string().optional().describe("Dossier à lister (chemin absolu ou ~/…)"),
+      output_dir: z.string().optional().describe("Dossier de sortie (défaut : <dossier>/Sous-titrées)"),
+    },
+  },
+  async ({ folder, output_dir }) => {
+    if (!folder) {
+      const roots = driveRoots();
+      if (!roots.length) return text("Aucun Google Drive pour ordinateur trouvé. Installe-le : https://www.google.com/drive/download/");
+      return text(
+        roots.map((r) => ({
+          drive: r,
+          dossiers: fs.readdirSync(r, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name),
+        })),
+      );
+    }
+    const out = output_dir ?? defaultOutputDir(path.resolve(expandHome(folder)));
+    const files = scanFolder(folder, out);
+    return text({
+      dossier: path.resolve(expandHome(folder)),
+      sortie: path.resolve(expandHome(out)),
+      videos: files.map((f) => ({ fichier: path.basename(f.file), deja_faite: f.done })),
+    });
+  },
+);
+
+server.registerTool(
+  "caption_folder",
+  {
+    title: "Sous-titrer un dossier",
+    description:
+      "Sous-titre toutes les vidéos d'un dossier avec une configuration, et dépose les MP4 finis (« <nom>.sous-titres.mp4 ») dans le " +
+      "dossier de sortie. Les vidéos déjà faites sont sautées. Tourne en arrière-plan : rend un batch_id à suivre avec get_batch.",
+    inputSchema: {
+      folder: z.string().describe("Dossier des vidéos (chemin absolu ou ~/…)"),
+      config: z.string().optional().describe("Configuration enregistrée (défaut : chenek)"),
+      output_dir: z.string().optional().describe("Dossier de sortie (défaut : celui de la config, sinon <dossier>/Sous-titrées)"),
+      style: styleName.optional(),
+      language: z.enum(["fr", "en", "auto"]).optional(),
+      cut_silences: z.boolean().optional(),
+      min_silence_ms: z.number().int().min(100).max(3000).optional(),
+      accent: z.string().optional(),
+    },
+  },
+  async ({ folder, config, output_dir, style, language, cut_silences, min_silence_ms, accent }) => {
+    assertWhisperInstalled((process.env.CLIPCAPTION_MODEL as WhisperModel) || DEFAULT_MODEL);
+    const cfg: Config = {
+      ...getConfig(config ?? "chenek"),
+      ...(style ? { style } : {}),
+      ...(language ? { lang: language } : {}),
+      ...(cut_silences !== undefined ? { cutSilences: cut_silences } : {}),
+      ...(min_silence_ms ? { minSilenceMs: min_silence_ms } : {}),
+      ...(accent ? { accent } : {}),
+    };
+    checkStyle(cfg.style);
+    const before = scanFolder(folder, output_dir ?? cfg.outputDir ?? defaultOutputDir(path.resolve(expandHome(folder))));
+    if (!before.length) throw new Error(`Aucune vidéo dans ${folder}`);
+    // Le lot tourne en arrière-plan ; son état est enregistré au fil de l'eau (get_batch).
+    const batchId = newBatchId();
+    runBatch({ id: batchId, inputDir: folder, outputDir: output_dir, config: cfg }).catch((e) => console.error("[lot]", e));
+    return text({
+      batch_id: batchId,
+      a_faire: before.filter((f) => !f.done).length,
+      deja_faites: before.filter((f) => f.done).length,
+      config: cfg.name,
+      note: "Traitement en cours en arrière-plan. Suis l'avancement avec get_batch (une vidéo prend en général 1 à 3 minutes).",
+    });
+  },
+);
+
+server.registerTool(
+  "get_batch",
+  {
+    title: "Suivre un lot",
+    description: "État d'un lot lancé avec caption_folder : vidéos faites, en cours, en erreur, et fichiers produits.",
+    inputSchema: { batch_id: z.string() },
+  },
+  async ({ batch_id }) => {
+    const b = getBatch(batch_id);
+    if (!b) throw new Error(`Lot introuvable : ${batch_id}`);
+    return text({
+      statut: b.status === "running" ? "en cours" : "terminé",
+      sortie: b.outputDir,
+      videos: b.items.map((i) => ({
+        fichier: path.basename(i.file),
+        etat: { pending: "à faire / en cours", done: "faite", skipped: "déjà faite", error: "erreur" }[i.status],
+        ...(i.output ? { resultat: path.basename(i.output) } : {}),
+        ...(i.error ? { erreur: i.error } : {}),
+      })),
+    });
+  },
+);
+
+server.registerTool(
+  "list_configs",
+  { title: "Configurations", description: "Configurations enregistrées (style, langue, coupes, accent, dossier de sortie).", inputSchema: {} },
+  async () => text(listConfigs()),
+);
+
+server.registerTool(
+  "save_config",
+  {
+    title: "Enregistrer une configuration",
+    description: "Crée ou remplace une configuration nommée, réutilisable avec caption_video, caption_folder et npm run lot.",
+    inputSchema: configSchema.shape,
+  },
+  async (args) => text(saveConfig(args)),
 );
 
 server.registerTool(

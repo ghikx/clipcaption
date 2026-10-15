@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { styleFonts } from "./style-schema";
 import { allStyles, resolveStyle } from "./styles-store";
@@ -14,6 +15,19 @@ const enqueue = <T>(task: () => Promise<T>): Promise<T> => {
   const next = queue.then(task, task);
   queue = next.catch(() => {});
   return next;
+};
+
+export const safeName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, "-").trim() || "video";
+
+// Copie l'export dans le dossier de sortie (ex. Google Drive synchronisé). Écrit d'abord un
+// fichier temporaire caché puis le renomme, pour que Drive n'envoie jamais un fichier à moitié copié.
+export const copyToOutput = (file: string, dir: string, name: string) => {
+  fs.mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, name);
+  const tmp = path.join(dir, `.${name}.part`);
+  fs.copyFileSync(file, tmp);
+  fs.renameSync(tmp, target);
+  return target;
 };
 
 // Limite les écritures de project.json pendant la progression.
@@ -93,12 +107,13 @@ export const queueRender = (id: string) => {
         outPath: path.join(projectDir(id), file),
         onProgress: progressWriter(id, "rendering"),
       });
+      const copiedTo = p.outputDir ? copyToOutput(result.outPath, p.outputDir, p.outputName ?? `${safeName(p.name)}.sous-titres.mp4`) : undefined;
       updateProject(id, (proj) => {
         proj.status = "ready";
         proj.progress = 1;
-        proj.renders.unshift({ file, style: p.style, createdAt: new Date().toISOString(), durationMs: result.durationMs });
+        proj.renders.unshift({ file, style: p.style, createdAt: new Date().toISOString(), durationMs: result.durationMs, copiedTo });
       });
-      return { file, absolutePath: result.outPath };
+      return { file, absolutePath: result.outPath, copiedTo };
     } catch (e) {
       return fail(id, e);
     }
