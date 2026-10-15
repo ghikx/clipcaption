@@ -33,6 +33,10 @@ export type Project = {
   overrides: StyleOverrides;
   settings: EditSettings;
   renders: RenderInfo[];
+  // Exporter automatiquement dès la fin de la transcription (upload en lot depuis l'interface).
+  autoExport?: boolean;
+  // Configuration appliquée à la création, pour l'affichage.
+  config?: string;
   // Dossier où copier chaque export (ex. un dossier Google Drive synchronisé).
   outputDir?: string;
   // Nom du fichier copié dans outputDir (sinon « <nom du projet>.sous-titres.mp4 »).

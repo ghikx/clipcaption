@@ -4,6 +4,7 @@ import type { CaptionStyle } from "../src/styles";
 export type { Project };
 export type ProjectSummary = Omit<Project, "words"> & { wordCount: number };
 export type StyleInfo = { name: string; label: string; custom: boolean; definition: CaptionStyle; thumb: string | null };
+export type ConfigInfo = { name: string; style: string; lang: string; cutSilences: boolean; minSilenceMs: number; outputDir?: string };
 export type Info = {
   root: string;
   whisper: { installed: boolean; model: string; modelReady: boolean };
@@ -38,14 +39,19 @@ export const api = {
     send("POST", "/api/styles", { name, base, changes }).then(json<{ id: string }>),
   updateStyle: (id: string, name: string, changes: CaptionStyle) => send("PUT", `/api/styles/${id}`, { name, changes }).then(json<{ id: string }>),
   deleteStyle: (id: string) => send("DELETE", `/api/styles/${id}`).then(json<void>),
+  configs: () => fetch("/api/configs").then(json<ConfigInfo[]>),
+  bulk: (ids: string[], body: { action?: "export"; config?: string }) =>
+    send("POST", "/api/projects/bulk", { ids, ...body }).then(json<{ id: string; ok?: boolean; queued?: string; error?: string }[]>),
   saveConfig: (config: Record<string, unknown>) => send("POST", "/api/configs", config).then(json<unknown>),
   importDrive: (url: string, lang: string) => send("POST", "/api/projects/drive", { url, lang }).then(json<Project>),
 
   // XHR plutôt que fetch : seul XHR donne la progression de l'envoi.
-  upload: (file: File, lang: string, onProgress: (p: number) => void) =>
+  upload: (file: File, lang: string, onProgress: (p: number) => void, opts: { config?: string; autoExport?: boolean } = {}) =>
     new Promise<Project>((resolve, reject) => {
       const form = new FormData();
       form.append("lang", lang);
+      if (opts.config) form.append("config", opts.config);
+      if (opts.autoExport !== undefined) form.append("autoExport", String(opts.autoExport));
       form.append("file", file);
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/projects");

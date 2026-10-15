@@ -69,11 +69,15 @@ export const queueTranscription = (id: string, lang?: Language) => {
         model: (process.env.CLIPCAPTION_MODEL as typeof DEFAULT_MODEL) || DEFAULT_MODEL,
         onProgress: progressWriter(id, "transcribing"),
       });
-      return updateProject(id, (proj) => {
+      const done = updateProject(id, (proj) => {
         proj.words = words;
         proj.status = "ready";
         proj.progress = 1;
       });
+      // Export automatique : mis en file après la transcription, sans attendre ici
+      // (sinon la file attendrait sa propre tâche).
+      if (done.autoExport) queueMicrotask(() => queueRender(id).catch(() => {}));
+      return done;
     } catch (e) {
       return fail(id, e);
     }

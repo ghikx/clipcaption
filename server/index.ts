@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import multer from "multer";
 import { downloadFromDrive, driveRoots } from "../core/drive";
-import { expandHome, listConfigs, saveConfig } from "../core/configs";
+import { configToProject, expandHome, getConfig, listConfigs, saveConfig } from "../core/configs";
 import { queueRender, queueTranscription, recoverStaleJobs } from "../core/jobs";
 import { PUBLIC_DIR, ROOT, UI_PORT } from "../core/paths";
 import {
@@ -18,6 +18,7 @@ import {
   projectDir,
   requireProject,
   saveProject,
+  updateProject,
   type Project,
 } from "../core/projects";
 import { whisperStatus, type Language } from "../core/transcribe";
@@ -30,7 +31,13 @@ const UI_DIR = path.join(ROOT, "dist", "app");
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 
-const upload = multer({ dest: path.join(os.tmpdir(), "clipcaption-uploads"), limits: { fileSize: 8 * 1024 ** 3 } });
+// defParamCharset utf8 : sinon les noms de fichiers accentués (« Épisode 2.mp4 ») sont lus
+// en latin1 et arrivent corrompus (« Ã‰pisode 2.mp4 »).
+const upload = multer({
+  dest: path.join(os.tmpdir(), "clipcaption-uploads"),
+  limits: { fileSize: 8 * 1024 ** 3 },
+  defParamCharset: "utf8",
+});
 
 const pid = (req: Request) => String(req.params.id);
 const asLang = (v: unknown): Language => (v === "fr" || v === "en" ? v : "auto");
@@ -39,6 +46,25 @@ const asLang = (v: unknown): Language => (v === "fr" || v === "en" ? v : "auto")
 const route =
   (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) =>
     Promise.resolve(fn(req, res)).catch(next);
+
+// Applique une configuration enregistrée à un projet (style, coupes, ajustements, dossier
+// de sortie). La langue choisie à l'upload reste prioritaire, sauf « auto ».
+const applyConfig = (id: string, configName: unknown, autoExport?: boolean) => {
+  if (typeof configName !== "string" || !configName) {
+    if (autoExport !== undefined) updateProject(id, (p) => void (p.autoExport = autoExport));
+    return;
+  }
+  const s = configToProject(getConfig(configName));
+  updateProject(id, (p) => {
+    p.style = s.style;
+    p.settings = s.settings;
+    p.overrides = s.overrides;
+    p.config = configName;
+    if (p.lang === "auto") p.lang = s.lang;
+    if (s.outputDir) p.outputDir = s.outputDir;
+    if (autoExport !== undefined) p.autoExport = autoExport;
+  });
+};
 
 // Les jobs tournent en arrière-plan : leur erreur est déjà enregistrée dans le projet.
 const background = (p: Promise<unknown>) => p.catch((e) => console.error("[job]", e instanceof Error ? e.message : e));
@@ -145,6 +171,7 @@ app.post(
     const withExt = `${req.file.path}${path.extname(req.file.originalname).toLowerCase() || ".mp4"}`;
     fs.renameSync(req.file.path, withExt);
     const project = await createProject(withExt, { name, lang: asLang(req.body.lang), move: true });
+    applyConfig(project.id, req.body.config, req.body.autoExport === "true");
     ensurePreview(project.id);
     background(queueTranscription(project.id));
     res.status(201).json(getProject(project.id));
@@ -214,6 +241,32 @@ app.post(
   route((req, res) => {
     background(queueRender(pid(req)));
     res.json(getProject(pid(req)));
+  }),
+);
+
+// Actions sur plusieurs projets depuis la page Projets.
+app.post(
+  "/api/projects/bulk",
+  route((req, res) => {
+    const ids: string[] = Array.isArray(req.body.ids) ? req.body.ids.map(String) : [];
+    const results = ids.map((id) => {
+      try {
+        if (req.body.config) applyConfig(id, req.body.config);
+        if (req.body.action === "export") {
+          const p = requireProject(id);
+          // Pas encore transcrit : exporté automatiquement à la fin de la transcription.
+          if (!p.words) {
+            updateProject(id, (proj) => void (proj.autoExport = true));
+            return { id, queued: "after-transcription" };
+          }
+          background(queueRender(id));
+        }
+        return { id, ok: true };
+      } catch (e) {
+        return { id, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+    res.json(results);
   }),
 );
 

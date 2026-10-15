@@ -1263,6 +1263,121 @@ input[type="range"]::-moz-range-thumb {
   gap: 20px;
 }
 
+/* ---------- upload multiple & actions groupées ---------- */
+
+.upload-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-options .d-row select {
+  max-width: 62%;
+}
+
+.upload-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.upload-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  align-items: center;
+}
+
+.upload-list .bar {
+  grid-column: 1 / -1;
+}
+
+.upload-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-all {
+  margin-left: auto;
+}
+
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  position: sticky;
+  top: 12px;
+  z-index: 5;
+  background: rgba(18, 18, 18, 0.92);
+}
+
+.bulk-bar select {
+  flex: 0 1 280px;
+}
+
+.bulk-msg {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.select-box {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  background: rgba(10, 10, 10, 0.6);
+  color: var(--accent-ink);
+  font-weight: 800;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.project-card:hover .select-box,
+.select-box.on,
+.grid:has(.project-card.selected) .select-box {
+  opacity: 1;
+}
+
+.select-box.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.project-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(238, 242, 107, 0.25);
+}
+
+.project-card .download {
+  position: absolute;
+  top: 10px;
+  right: 52px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.project-card:hover .download {
+  opacity: 1;
+}
+
+.project-card .download:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ---------- designer de styles ---------- */
 
 .editor-grid:has(.inspector.designing) {

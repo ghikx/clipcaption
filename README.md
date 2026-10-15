@@ -35,7 +35,8 @@ npm run app
 
 Puis ouvre **http://localhost:4321**.
 
-1. **Importe** une vidéo : glisser-déposer, ou lien de partage Google Drive. Choisis la langue (Auto / FR / EN). La transcription démarre seule.
+1. **Importe** une ou plusieurs vidéos d'un coup (glisser-déposer ou sélection multiple), ou un lien de partage Google Drive. Choisis la langue et la configuration (`chenek` par défaut). Avec « Exporter automatiquement », chaque vidéo est transcrite puis exportée sans rien faire d'autre.
+   Sur la page Projets, coche plusieurs vidéos pour leur appliquer une configuration, les exporter ou télécharger leurs exports d'un coup.
 2. **Édite par le texte**, dans la colonne du milieu :
    - clic sur un mot : la vidéo y va ;
    - glisser : sélectionner plusieurs mots ;
