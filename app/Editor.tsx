@@ -737,7 +737,7 @@ const Transcript = memo(
 );
 
 const TranscribingCard = ({ project }: { project: Project }) => (
-  <div className="transcribing">
+  <div className="transcribing-card">
     {project.status === "transcribing" || project.status === "uploaded" ? (
       <>
         <p className="big">

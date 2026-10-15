@@ -101,6 +101,13 @@ export const renderEdit = async (o: RenderOptions) => {
       composition,
       inputProps,
       codec: "h264",
+      // Qualité : par défaut Remotion capture les images en JPEG qualité 80 (artefacts
+      // visibles sur les détails fins et autour du texte). 100 = quasi sans perte.
+      jpegQuality: 100,
+      // CRF 17 (défaut 18) : un peu plus fidèle à la source, fichier un peu plus lourd.
+      crf: 17,
+      // bt709 = espace colorimétrique standard de la vidéo : évite un décalage de couleurs.
+      colorSpace: "bt709",
       outputLocation: o.outPath,
       browserExecutable,
       onProgress: ({ progress }) => o.onProgress?.(progress),
