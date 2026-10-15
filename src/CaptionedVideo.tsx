@@ -11,7 +11,7 @@ import {
 } from "remotion";
 import "./fonts";
 import { remapCaptions, type Segment } from "./segments";
-import { STYLES, applyOverrides, type CaptionStyle, type StyleName, type StyleOverrides } from "./styles";
+import { STYLES, applyOverrides, isPreset, type Animation, type CaptionStyle, type StyleName, type StyleOverrides } from "./styles";
 import { paginate, type Page, type Word } from "./words";
 
 export type CaptionedVideoProps = {
@@ -21,7 +21,9 @@ export type CaptionedVideoProps = {
   captions: Word[];
   // Portions gardées (silences coupés), alignées sur les frames. null = vidéo entière.
   segments: Segment[] | null;
+  // Nom du style. Pour un style perso, sa définition complète est passée dans styleDef.
   style: StyleName;
+  styleDef?: CaptionStyle;
   overrides?: StyleOverrides;
   width: number;
   height: number;
@@ -29,9 +31,12 @@ export type CaptionedVideoProps = {
   durationInFrames: number;
 };
 
-export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captions, segments, style, overrides }) => {
+export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captions, segments, style, styleDef, overrides }) => {
   const { fps } = useVideoConfig();
-  const s: CaptionStyle = useMemo(() => applyOverrides(STYLES[style] ?? STYLES.submagic, overrides), [style, overrides]);
+  const s: CaptionStyle = useMemo(
+    () => applyOverrides(styleDef ?? (isPreset(style) ? STYLES[style] : STYLES.chenek), overrides),
+    [style, styleDef, overrides],
+  );
 
   const pages = useMemo(
     () =>
@@ -96,54 +101,88 @@ const rand = (seed: number) => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
+// Effet d'entrée, de 0 (début) à 1 (installé). Rend scale, décalage vertical (em),
+// opacité et flou (px) à appliquer.
+const entrance = (animation: Animation, frame: number, fps: number) => {
+  if (animation === "none") return { scale: 1, y: 0, opacity: 1, blur: 0 };
+  const bouncy = animation === "bounce";
+  const p = spring({
+    frame,
+    fps,
+    config: bouncy ? { damping: 7, stiffness: 220 } : { damping: 14, stiffness: 220 },
+    durationInFrames: bouncy ? 14 : 9,
+  });
+  const fadeIn = interpolate(frame, [0, 5], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  switch (animation) {
+    case "pop":
+      return { scale: interpolate(p, [0, 1], [0.75, 1]), y: 0, opacity: 1, blur: 0 };
+    case "bounce":
+      return { scale: interpolate(p, [0, 1], [0.4, 1]), y: 0, opacity: 1, blur: 0 };
+    case "fade":
+      return { scale: 1, y: 0, opacity: fadeIn, blur: 0 };
+    case "slide-up":
+      return { scale: 1, y: interpolate(p, [0, 1], [0.6, 0]), opacity: fadeIn, blur: 0 };
+    case "blur":
+      return { scale: interpolate(p, [0, 1], [1.08, 1]), y: 0, opacity: fadeIn, blur: interpolate(p, [0, 1], [14, 0]) };
+  }
+};
+
 const PageView: React.FC<{ page: Page; s: CaptionStyle }> = ({ page, s }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   // Dans une Sequence, le frame repart de 0 au début de l'écran.
   const timeMs = page.startMs + (frame / fps) * 1000;
-
-  // Les styles où les mots arrivent un par un n'animent pas l'écran entier.
-  const enter =
-    s.reveal === "page" ? spring({ frame, fps, config: { damping: 14, stiffness: 220 }, durationInFrames: 8 }) : 1;
-  const pageScale = interpolate(enter, [0, 1], [0.8, 1]);
   const fontSize = width * s.fontSizeRatio;
+  const align = s.align ?? "center";
+  // Les styles où les mots arrivent un par un animent les mots, pas l'écran.
+  const e = s.reveal === "page" ? entrance(s.animation ?? "pop", frame, fps) : entrance("none", 0, fps);
+  const justify = align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center";
+  const margin = width * ((1 - (s.maxWidthRatio ?? 0.88)) / 2);
 
   return (
     <AbsoluteFill>
       <div
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
+          left: margin,
+          right: margin,
           top: height * s.verticalPosition,
-          transform: `translateY(-50%) scale(${pageScale})`,
+          transform: `translateY(-50%) translateY(${e.y}em) scale(${e.scale})`,
+          transformOrigin: align === "left" ? "left center" : align === "right" ? "right center" : "center",
+          opacity: e.opacity,
+          filter: e.blur ? `blur(${e.blur}px)` : undefined,
           display: "flex",
-          justifyContent: "center",
+          justifyContent: justify,
+          fontSize,
         }}
       >
         <div
           style={{
-            maxWidth: width * 0.88,
             display: "flex",
             flexWrap: "wrap",
-            justifyContent: "center",
+            justifyContent: justify,
             alignItems: "center",
             // Plus d'air quand les mots grossissent, pivotent ou ont une pastille,
             // pour qu'ils ne mordent pas sur leurs voisins.
-            columnGap: fontSize * (s.activeBackground || s.activeScale > 1.08 ? 0.38 : 0.25),
-            rowGap: fontSize * (s.chaos ? 0.35 : 0.08),
+            columnGap:
+              fontSize *
+              (0.22 + (s.activeBackground || s.wordBackground ? 0.08 : 0) + (s.stroke ? s.stroke.ratio * 0.6 : 0) + (s.shadow ? 0.04 : 0)),
+            rowGap: fontSize * (s.chaos ? 0.35 : s.wordBackground ? 0.16 : 0.08),
             fontFamily: s.fontFamily,
             fontWeight: s.fontWeight,
+            fontStyle: s.italic ? "italic" : "normal",
             fontSize,
             letterSpacing: s.letterSpacing,
-            lineHeight: 1.15,
-            textAlign: "center",
+            lineHeight: s.lineHeight ?? 1.15,
+            textAlign: align,
             textTransform: s.uppercase ? "uppercase" : "none",
             ...(s.box
               ? {
                   backgroundColor: s.box.color,
                   borderRadius: fontSize * s.box.radiusRatio,
                   padding: `${fontSize * 0.35}px ${fontSize * 0.55}px`,
+                  backdropFilter: s.box.blur ? `blur(${s.box.blur}px)` : undefined,
+                  WebkitBackdropFilter: s.box.blur ? `blur(${s.box.blur}px)` : undefined,
                 }
               : {}),
           }}
@@ -168,19 +207,20 @@ const WordView: React.FC<{ word: Word; s: CaptionStyle; timeMs: number; pageStar
   const { fps } = useVideoConfig();
   const text = word.text.trim();
   const state = timeMs < word.startMs ? "future" : timeMs < word.endMs ? "active" : "spoken";
+  const active = state === "active";
   const sinceStart = frame - ((word.startMs - pageStartMs) / 1000) * fps;
   const em = word.emphasis && s.emphasis ? s.emphasis : null;
 
-  let color = state === "future" ? s.color : state === "active" ? s.activeColor : (s.spokenColor ?? s.color);
+  let color = state === "future" ? s.color : active ? s.activeColor : (s.spokenColor ?? s.color);
   if (em?.color) color = em.color;
 
   let fontFamily: string | undefined = em?.fontFamily;
-  let italic = em?.italic ?? false;
-  let rotate = 0;
+  let italic = em?.italic ?? s.italic ?? false;
+  let rotate = (active ? (s.activeRotate ?? 0) : 0) + (em?.rotate ?? 0);
   let offsetY = 0;
   if (s.chaos) {
     const r = (k: number) => rand(Math.round(word.startMs) * 7 + k);
-    rotate = (r(1) * 2 - 1) * s.chaos.maxRotateDeg;
+    rotate += (r(1) * 2 - 1) * s.chaos.maxRotateDeg;
     offsetY = (r(2) * 2 - 1) * 0.12;
     if (word.emphasis) {
       color = s.chaos.palette[Math.floor(r(3) * s.chaos.palette.length)];
@@ -192,15 +232,23 @@ const WordView: React.FC<{ word: Word; s: CaptionStyle; timeMs: number; pageStar
 
   // Mot prononcé : petit rebond de mise en avant.
   const pop = spring({ frame: sinceStart, fps, config: { damping: 12, stiffness: 300 }, durationInFrames: 6 });
-  let scale = state === "active" ? interpolate(pop, [0, 1], [1, s.activeScale]) : 1;
+  let scale = active ? interpolate(pop, [0, 1], [1, s.activeScale]) : 1;
+  // Le grossissement (transform) ne pousse pas les voisins : on ajoute une marge
+  // proportionnelle à la longueur du mot (~0,6 em par lettre, moitié de chaque côté).
+  const grow = Math.max(0, scale - 1) * text.length * 0.3 + (active && s.activeRotate ? 0.06 : 0);
+  let opacity = state === "future" && s.reveal === "page" ? (s.futureOpacity ?? 1) : 1;
+  let blur = 0;
 
-  // Arrivée mot par mot (styles "spoken") : le mot surgit avec un léger dépassement.
+  // Arrivée mot par mot (spoken / typewriter) : l'effet d'entrée s'applique au mot.
   let visible = true;
-  if (s.reveal === "spoken") {
+  if (s.reveal !== "page") {
     visible = state !== "future";
-    const arrive = spring({ frame: sinceStart, fps, config: { damping: 9, stiffness: 260 }, durationInFrames: 10 });
-    scale *= interpolate(arrive, [0, 1], [0.3, 1]);
-    rotate *= interpolate(arrive, [0, 1], [3, 1]);
+    const e = entrance(s.animation ?? (s.reveal === "spoken" ? "bounce" : "none"), sinceStart, fps);
+    scale *= e.scale;
+    offsetY += e.y;
+    opacity *= e.opacity;
+    blur = e.blur;
+    if (s.chaos) rotate *= interpolate(e.scale, [0.4, 1], [3, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   }
 
   // Machine à écrire : nombre de lettres affichées proportionnel au temps écoulé dans le mot.
@@ -210,24 +258,59 @@ const WordView: React.FC<{ word: Word; s: CaptionStyle; timeMs: number; pageStar
     typed = state === "future" ? 0 : Math.min(text.length, Math.ceil(progress * text.length));
   }
 
+  const background = active && s.activeBackground ? s.activeBackground : (em?.background ?? s.wordBackground ?? "transparent");
+  const gradient = s.gradient && (s.gradient.target === "all" || active) ? s.gradient : null;
+  const radius = fontSize * (s.wordRadiusRatio ?? 0.18);
+  const padded = background !== "transparent";
+
   return (
     <span
       style={{
         display: "inline-block",
         visibility: visible ? "visible" : "hidden",
         color,
+        opacity,
+        filter: blur ? `blur(${blur}px)` : undefined,
         fontFamily,
         fontWeight: em?.fontWeight ?? (serif ? 400 : undefined),
         fontStyle: italic ? "italic" : "normal",
         // Le serif italique est plus petit à corps égal : on compense.
         fontSize: `${(em?.scale ?? 1) * (serif ? 1.15 : 1)}em`,
         textTransform: em?.uppercase === undefined ? undefined : em.uppercase ? "uppercase" : "none",
-        backgroundColor: state === "active" && s.activeBackground ? s.activeBackground : "transparent",
-        borderRadius: fontSize * 0.18,
-        padding: `0 ${fontSize * 0.12}px`,
+        backgroundColor: gradient ? undefined : background,
+        borderRadius: radius,
+        marginInline: grow ? `${grow}em` : undefined,
+        padding: padded ? `0 ${fontSize * 0.14}px` : `0 ${fontSize * 0.04}px`,
         WebkitTextStroke: s.stroke ? `${s.stroke.ratio}em ${s.stroke.color}` : undefined,
         paintOrder: "stroke fill",
-        textShadow: s.shadow ?? undefined,
+        textShadow: gradient ? undefined : (s.shadow ?? undefined),
+        textDecoration: active && s.activeDecoration === "underline" ? "underline" : undefined,
+        textDecorationThickness: "0.07em",
+        textUnderlineOffset: "0.14em",
+        textDecorationColor: s.activeColor,
+        ...(gradient
+          ? {
+              backgroundImage: `linear-gradient(100deg, ${gradient.from}, ${gradient.to})`,
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              // Le contour natif recouvrirait le dégradé (texte noir sur une police fine) :
+              // on le simule avec des ombres nettes, dessinées sous le remplissage.
+              WebkitTextStroke: undefined,
+              filter:
+                [
+                  blur ? `blur(${blur}px)` : "",
+                  s.stroke
+                    ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+                        .map(([x, y]) => `drop-shadow(${x * s.stroke!.ratio * 0.5}em ${y * s.stroke!.ratio * 0.5}em 0 ${s.stroke!.color})`)
+                        .join(" ")
+                    : "",
+                  s.shadow ? "drop-shadow(0 0.05em 0.12em rgba(0,0,0,0.5))" : "",
+                ]
+                  .join(" ")
+                  .trim() || undefined,
+            }
+          : {}),
         transform: `translateY(${offsetY}em) rotate(${rotate}deg) scale(${scale})`,
       }}
     >

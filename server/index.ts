@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import multer from "multer";
 import { downloadFromDrive } from "../core/drive";
-import { queueRender, queueTranscription, recoverStaleJobs, styleList } from "../core/jobs";
+import { queueRender, queueTranscription, recoverStaleJobs } from "../core/jobs";
 import { PUBLIC_DIR, ROOT, UI_PORT } from "../core/paths";
 import {
   createProject,
@@ -20,7 +20,9 @@ import {
   type Project,
 } from "../core/projects";
 import { whisperStatus, type Language } from "../core/transcribe";
-import { isStyleName } from "../src/styles";
+import { fontFamilies, installGoogleFont } from "../core/fonts";
+import { makeThumb } from "../core/style-thumbs";
+import { allStyles, deleteCustomStyle, getCustomStyle, saveCustomStyle, styleExists, thumbPath } from "../core/styles-store";
 import type { Word } from "../src/words";
 
 const UI_DIR = path.join(ROOT, "dist", "app");
@@ -51,9 +53,67 @@ app.get("/api/info", (_req, res) => {
   });
 });
 
+// Préréglages + styles perso, avec leur définition complète (le designer en part).
 app.get("/api/styles", (_req, res) => {
-  res.json(styleList());
+  res.json(
+    allStyles().map((s) => ({
+      ...s,
+      thumb: s.custom ? (fs.existsSync(thumbPath(s.name)) ? `/api/styles/${s.name}/thumb?v=${fs.statSync(thumbPath(s.name)).mtimeMs}` : null) : `/styles/${s.name}.jpg`,
+    })),
+  );
 });
+
+app.post(
+  "/api/styles",
+  route(async (req, res) => {
+    const style = await saveCustomStyle({ name: String(req.body.name ?? ""), base: req.body.base, changes: req.body.changes });
+    makeThumb(style).catch(() => {});
+    res.status(201).json(style);
+  }),
+);
+
+app.put(
+  "/api/styles/:id",
+  route(async (req, res) => {
+    const id = pid(req);
+    const current = getCustomStyle(id);
+    if (!current) throw new Error("Style introuvable.");
+    const style = await saveCustomStyle({ id, name: String(req.body.name ?? current.name), changes: req.body.changes });
+    makeThumb(style).catch(() => {});
+    res.json(style);
+  }),
+);
+
+app.delete("/api/styles/:id", (req, res) => {
+  const id = pid(req);
+  deleteCustomStyle(id);
+  // Les projets qui utilisaient ce style repassent sur le style par défaut.
+  for (const p of listProjects()) {
+    if (p.style === id) {
+      const full = getProject(p.id);
+      if (full) saveProject({ ...full, style: "chenek" });
+    }
+  }
+  res.status(204).end();
+});
+
+app.get("/api/styles/:id/thumb", (req, res) => {
+  const file = thumbPath(pid(req));
+  if (!fs.existsSync(file)) return void res.status(404).end();
+  res.sendFile(file);
+});
+
+app.get("/api/fonts", (_req, res) => {
+  res.json(fontFamilies());
+});
+
+app.post(
+  "/api/fonts",
+  route(async (req, res) => {
+    const entries = await installGoogleFont(String(req.body.family ?? ""));
+    res.status(201).json({ family: entries[0]?.family, entries });
+  }),
+);
 
 app.get("/api/projects", (_req, res) => {
   res.json(listProjects().map(({ words, ...p }) => ({ ...p, wordCount: words?.length ?? 0 })));
@@ -101,7 +161,7 @@ app.patch(
     const p = requireProject(pid(req));
     const b = req.body as Partial<Project>;
     if (typeof b.name === "string" && b.name.trim()) p.name = b.name.trim().slice(0, 120);
-    if (typeof b.style === "string" && isStyleName(b.style)) p.style = b.style;
+    if (typeof b.style === "string" && styleExists(b.style)) p.style = b.style;
     if (b.overrides && typeof b.overrides === "object") p.overrides = b.overrides;
     if (b.settings && typeof b.settings === "object") {
       p.settings = {

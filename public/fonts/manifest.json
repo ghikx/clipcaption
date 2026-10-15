@@ -1,0 +1,272 @@
+[
+  {
+    "family": "Montserrat",
+    "file": "Montserrat.woff2",
+    "weight": "100 900",
+    "style": "normal"
+  },
+  {
+    "family": "Inter",
+    "file": "Inter.woff2",
+    "weight": "100 900",
+    "style": "normal"
+  },
+  {
+    "family": "Anton",
+    "file": "Anton-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Instrument Serif",
+    "file": "InstrumentSerif-Italic.woff2",
+    "weight": "400",
+    "style": "italic"
+  },
+  {
+    "family": "Space Mono",
+    "file": "SpaceMono-700.woff2",
+    "weight": "700",
+    "style": "normal"
+  },
+  {
+    "family": "Inter Tight",
+    "file": "InterTight.woff2",
+    "weight": "100 900",
+    "style": "normal"
+  },
+  {
+    "family": "Inter Tight",
+    "file": "InterTight-Italic.woff2",
+    "weight": "100 900",
+    "style": "italic"
+  },
+  {
+    "family": "Geist Mono",
+    "file": "GeistMono.woff2",
+    "weight": "100 900",
+    "style": "normal"
+  },
+  {
+    "family": "Luckiest Guy",
+    "file": "google/LuckiestGuy-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Bebas Neue",
+    "file": "google/BebasNeue-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Playfair Display",
+    "file": "google/PlayfairDisplay-italic-400.woff2",
+    "weight": "400",
+    "style": "italic"
+  },
+  {
+    "family": "Playfair Display",
+    "file": "google/PlayfairDisplay-italic-700.woff2",
+    "weight": "700",
+    "style": "italic"
+  },
+  {
+    "family": "Playfair Display",
+    "file": "google/PlayfairDisplay-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Playfair Display",
+    "file": "google/PlayfairDisplay-normal-700.woff2",
+    "weight": "700",
+    "style": "normal"
+  },
+  {
+    "family": "Permanent Marker",
+    "file": "google/PermanentMarker-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Archivo Black",
+    "file": "google/ArchivoBlack-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "DM Serif Display",
+    "file": "google/DMSerifDisplay-italic-400.woff2",
+    "weight": "400",
+    "style": "italic"
+  },
+  {
+    "family": "DM Serif Display",
+    "file": "google/DMSerifDisplay-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Bricolage Grotesque",
+    "file": "google/BricolageGrotesque-normal-200_800.woff2",
+    "weight": "200 800",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-100.woff2",
+    "weight": "100",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-200.woff2",
+    "weight": "200",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-300.woff2",
+    "weight": "300",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-400.woff2",
+    "weight": "400",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-500.woff2",
+    "weight": "500",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-600.woff2",
+    "weight": "600",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-700.woff2",
+    "weight": "700",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-800.woff2",
+    "weight": "800",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-italic-900.woff2",
+    "weight": "900",
+    "style": "italic"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-100.woff2",
+    "weight": "100",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-200.woff2",
+    "weight": "200",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-300.woff2",
+    "weight": "300",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-500.woff2",
+    "weight": "500",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-600.woff2",
+    "weight": "600",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-700.woff2",
+    "weight": "700",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-800.woff2",
+    "weight": "800",
+    "style": "normal"
+  },
+  {
+    "family": "Poppins",
+    "file": "google/Poppins-normal-900.woff2",
+    "weight": "900",
+    "style": "normal"
+  },
+  {
+    "family": "Syne",
+    "file": "google/Syne-normal-400_800.woff2",
+    "weight": "400 800",
+    "style": "normal"
+  },
+  {
+    "family": "Unbounded",
+    "file": "google/Unbounded-normal-200_800.woff2",
+    "weight": "200 800",
+    "style": "normal"
+  },
+  {
+    "family": "Space Grotesk",
+    "file": "google/SpaceGrotesk-normal-300.woff2",
+    "weight": "300",
+    "style": "normal"
+  },
+  {
+    "family": "Space Grotesk",
+    "file": "google/SpaceGrotesk-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  },
+  {
+    "family": "Space Grotesk",
+    "file": "google/SpaceGrotesk-normal-500.woff2",
+    "weight": "500",
+    "style": "normal"
+  },
+  {
+    "family": "Space Grotesk",
+    "file": "google/SpaceGrotesk-normal-600.woff2",
+    "weight": "600",
+    "style": "normal"
+  },
+  {
+    "family": "Space Grotesk",
+    "file": "google/SpaceGrotesk-normal-700.woff2",
+    "weight": "700",
+    "style": "normal"
+  },
+  {
+    "family": "Righteous",
+    "file": "google/Righteous-normal-400.woff2",
+    "weight": "400",
+    "style": "normal"
+  }
+]

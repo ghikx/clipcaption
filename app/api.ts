@@ -1,8 +1,9 @@
 import type { Project } from "../core/projects";
+import type { CaptionStyle } from "../src/styles";
 
 export type { Project };
 export type ProjectSummary = Omit<Project, "words"> & { wordCount: number };
-export type StyleInfo = { name: string; label: string };
+export type StyleInfo = { name: string; label: string; custom: boolean; definition: CaptionStyle; thumb: string | null };
 export type Info = {
   root: string;
   whisper: { installed: boolean; model: string; modelReady: boolean };
@@ -33,6 +34,10 @@ export const api = {
   transcribe: (id: string, lang: string) => send("POST", `/api/projects/${id}/transcribe`, { lang }).then(json<Project>),
   render: (id: string) => send("POST", `/api/projects/${id}/render`, {}).then(json<Project>),
   remove: (id: string) => send("DELETE", `/api/projects/${id}`).then(json<void>),
+  createStyle: (name: string, base: string | undefined, changes: CaptionStyle) =>
+    send("POST", "/api/styles", { name, base, changes }).then(json<{ id: string }>),
+  updateStyle: (id: string, name: string, changes: CaptionStyle) => send("PUT", `/api/styles/${id}`, { name, changes }).then(json<{ id: string }>),
+  deleteStyle: (id: string) => send("DELETE", `/api/styles/${id}`).then(json<void>),
   importDrive: (url: string, lang: string) => send("POST", "/api/projects/drive", { url, lang }).then(json<Project>),
 
   // XHR plutôt que fetch : seul XHR donne la progression de l'envoi.

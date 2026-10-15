@@ -6,7 +6,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { STYLES, isStyleName } from "../src/styles";
+import os from "node:os";
+import { fontFamilies, installGoogleFont } from "./fonts";
+import { renderStyleStill } from "./render";
+import { partialStyleSchema, styleFonts } from "./style-schema";
+import { makeThumb } from "./style-thumbs";
+import { allStyles, deleteCustomStyle, getCustomStyle, resolveStyle, saveCustomStyle, styleExists } from "./styles-store";
+import { ensureFonts } from "./fonts";
+import { sourcePath } from "./projects";
+import type { CaptionStyle, StyleOverrides } from "../src/styles";
 import { downloadFromDrive, isDriveUrl } from "./drive";
 import { queueRender, queueTranscription, recoverStaleJobs, styleList } from "./jobs";
 import { UI_PORT } from "./paths";
@@ -17,7 +25,10 @@ import { createProject, listProjects, projectDir, requireProject, saveProject, t
 
 const server = new McpServer({ name: "clipcaption", version: "1.0.0" });
 
-const styleNames = Object.keys(STYLES) as [string, ...string[]];
+const styleName = z.string().describe("Nom d'un préréglage (list_styles) ou identifiant d'un style perso (perso-…)");
+const checkStyle = (name: string | undefined) => {
+  if (name && !styleExists(name)) throw new Error(`Style inconnu : ${name}. Utilise list_styles.`);
+};
 const editUrl = (id: string) => `http://localhost:${UI_PORT}/#/p/${id}`;
 const text = (value: unknown) => ({
   content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
@@ -44,8 +55,138 @@ const summary = (p: Project) => ({
 
 server.registerTool(
   "list_styles",
-  { title: "Lister les styles", description: "Liste les styles de sous-titres disponibles.", inputSchema: {} },
+  {
+    title: "Lister les styles",
+    description: "Liste les styles de sous-titres : préréglages et styles perso (custom: true). get_style donne la définition complète d'un style.",
+    inputSchema: {},
+  },
   async () => text(styleList()),
+);
+
+server.registerTool(
+  "get_style",
+  {
+    title: "Définition d'un style",
+    description: "Rend la définition JSON complète d'un style, pour s'en inspirer ou la modifier avec create_style / update_style.",
+    inputSchema: { name: styleName },
+  },
+  async ({ name }) => {
+    const def = resolveStyle(name);
+    if (!def) throw new Error(`Style inconnu : ${name}`);
+    return text(def);
+  },
+);
+
+// Image d'aperçu renvoyée à Claude : il voit le résultat et peut corriger le style.
+const previewImage = async (styleDef: CaptionStyle, projectId?: string, overrides?: StyleOverrides) => {
+  await ensureFonts(styleFonts(styleDef));
+  const p = projectId ? requireProject(projectId) : null;
+  const out = path.join(os.tmpdir(), `clipcaption-preview-${Date.now()}.jpg`);
+  await renderStyleStill({
+    styleDef,
+    overrides: overrides ?? p?.overrides,
+    outPath: out,
+    scale: 0.5,
+    project: p?.words ? { videoPath: sourcePath(p), media: p.media, words: p.words, settings: p.settings } : undefined,
+  });
+  const data = fs.readFileSync(out).toString("base64");
+  fs.rmSync(out, { force: true });
+  return { type: "image" as const, data, mimeType: "image/jpeg" };
+};
+
+const designHelp =
+  "Tous les champs sont optionnels et documentés dans le schéma : police Google Fonts (installée automatiquement), couleurs, pastilles, " +
+  "contour, ombre/lueur (text-shadow en em), dégradé, fond de bloc (verre avec blur), mise en avant des mots importants, " +
+  "animation d'entrée, apparition mot par mot ou lettre par lettre, mode chaos, position, alignement, mots par écran. " +
+  "Rend une image d'aperçu : regarde-la et corrige avec update_style si besoin.";
+
+server.registerTool(
+  "create_style",
+  {
+    title: "Créer un style",
+    description: `Crée un style de sous-titres perso à partir d'un style existant (base) et des champs à changer. ${designHelp}`,
+    inputSchema: {
+      name: z.string().min(1).max(60).describe("Nom du style"),
+      base: styleName.optional().describe("Style de départ (défaut : chenek)"),
+      changes: partialStyleSchema.describe("Champs à modifier par rapport au style de départ"),
+      preview_project_id: z.string().optional().describe("Projet sur lequel montrer l'aperçu (sinon phrase d'exemple)"),
+    },
+  },
+  async ({ name, base, changes, preview_project_id }) => {
+    checkStyle(base);
+    const style = await saveCustomStyle({ name, base, changes });
+    makeThumb(style).catch(() => {});
+    const image = await previewImage(style.definition, preview_project_id);
+    return { content: [{ type: "text" as const, text: JSON.stringify({ id: style.id, name: style.name }, null, 2) }, image] };
+  },
+);
+
+server.registerTool(
+  "update_style",
+  {
+    title: "Modifier un style perso",
+    description: `Modifie des champs d'un style perso (id perso-…). ${designHelp}`,
+    inputSchema: {
+      id: z.string(),
+      name: z.string().max(60).optional(),
+      changes: partialStyleSchema,
+      preview_project_id: z.string().optional(),
+    },
+  },
+  async ({ id, name, changes, preview_project_id }) => {
+    const current = getCustomStyle(id);
+    if (!current) throw new Error(`Style perso introuvable : ${id}. Les préréglages ne se modifient pas : crée un style avec base.`);
+    const style = await saveCustomStyle({ id, name: name ?? current.name, changes });
+    makeThumb(style).catch(() => {});
+    const image = await previewImage(style.definition, preview_project_id);
+    return { content: [{ type: "text" as const, text: JSON.stringify({ id: style.id, name: style.name }, null, 2) }, image] };
+  },
+);
+
+server.registerTool(
+  "preview_style",
+  {
+    title: "Voir un style",
+    description: "Rend une image d'un style (existant, ou existant + changements non enregistrés), sur un projet ou sur une phrase d'exemple.",
+    inputSchema: {
+      style: styleName.optional().describe("Défaut : chenek"),
+      changes: partialStyleSchema.optional().describe("Changements à essayer sans enregistrer"),
+      project_id: z.string().optional(),
+    },
+  },
+  async ({ style, changes, project_id }) => {
+    checkStyle(style);
+    const def = { ...resolveStyle(style ?? "chenek")!, ...(changes ?? {}) } as CaptionStyle;
+    return { content: [await previewImage(def, project_id)] };
+  },
+);
+
+server.registerTool(
+  "delete_style",
+  { title: "Supprimer un style perso", description: "Supprime un style perso.", inputSchema: { id: z.string() } },
+  async ({ id }) => {
+    deleteCustomStyle(id);
+    return text(`Style ${id} supprimé.`);
+  },
+);
+
+server.registerTool(
+  "list_fonts",
+  { title: "Polices installées", description: "Polices disponibles localement. Toute autre police Google Fonts peut être installée.", inputSchema: {} },
+  async () => text(fontFamilies()),
+);
+
+server.registerTool(
+  "install_font",
+  {
+    title: "Installer une police",
+    description: "Télécharge une police Google Fonts (toutes graisses et italiques) pour l'utiliser dans un style.",
+    inputSchema: { family: z.string().describe("Nom exact sur fonts.google.com, ex. Space Grotesk") },
+  },
+  async ({ family }) => {
+    const entries = await installGoogleFont(family);
+    return text({ family: entries[0]?.family, variants: entries.map((e) => `${e.style} ${e.weight}`) });
+  },
 );
 
 server.registerTool(
@@ -57,7 +198,7 @@ server.registerTool(
       "Rend le chemin du MP4 final. Si le traitement dépasse ~50 s, renvoie le statut : appeler ensuite get_project pour suivre.",
     inputSchema: {
       source: z.string().describe("Chemin absolu d'un fichier vidéo, ou lien de partage Google Drive"),
-      style: z.enum(styleNames).optional().describe("Style de sous-titres (défaut : chenek)"),
+      style: styleName.optional().describe("Style de sous-titres (défaut : chenek)"),
       language: z.enum(["fr", "en", "auto"]).optional().describe("Langue parlée (défaut : auto)"),
       cut_silences: z.boolean().optional().describe("Couper les blancs entre les mots (défaut : false)"),
       min_silence_ms: z.number().int().min(100).max(3000).optional().describe("Durée minimale d'un blanc à couper (défaut : 500)"),
@@ -65,6 +206,7 @@ server.registerTool(
     },
   },
   async ({ source, style, language, cut_silences, min_silence_ms, accent }) => {
+    checkStyle(style);
     // Vérifié avant de créer le projet, pour ne pas laisser de projet en erreur.
     assertWhisperInstalled((process.env.CLIPCAPTION_MODEL as WhisperModel) || DEFAULT_MODEL);
     let file = source;
@@ -135,7 +277,7 @@ server.registerTool(
       "met en avant des mots, corrige le texte. Appeler ensuite render_project pour exporter.",
     inputSchema: {
       project_id: z.string(),
-      style: z.enum(styleNames).optional(),
+      style: styleName.optional(),
       accent: z.string().optional(),
       size_scale: z.number().min(0.5).max(2).optional().describe("Taille du texte, 1 = normal"),
       position: z.number().min(0.1).max(0.95).optional().describe("Position verticale, 0 = haut, 1 = bas"),
@@ -151,7 +293,8 @@ server.registerTool(
   },
   async (a) => {
     const p = requireProject(a.project_id);
-    if (a.style && isStyleName(a.style)) p.style = a.style;
+    checkStyle(a.style);
+    if (a.style) p.style = a.style;
     const o = { ...p.overrides };
     if (a.accent !== undefined) o.accent = a.accent;
     if (a.size_scale !== undefined) o.sizeScale = a.size_scale;

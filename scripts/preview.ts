@@ -9,7 +9,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import type { CaptionedVideoProps } from "../src/CaptionedVideo";
 import sample from "../src/sample-captions.json";
-import { STYLES, type StyleName } from "../src/styles";
+import { STYLES, type PresetName } from "../src/styles";
 import { markEmphasis } from "../src/words";
 import { ROOT } from "../core/paths";
 
@@ -30,7 +30,7 @@ const fps = 30;
 const lastMs = captions[captions.length - 1].endMs;
 
 const stills: string[] = [];
-for (const style of Object.keys(STYLES) as StyleName[]) {
+for (const style of Object.keys(STYLES) as PresetName[]) {
   const inputProps: CaptionedVideoProps = {
     videoSrc: "",
     captions,
@@ -74,27 +74,27 @@ for (const style of Object.keys(STYLES) as StyleName[]) {
   }
 }
 
-// Planche de tous les styles, légendée, sur deux rangées.
-const cols = Math.ceil(stills.length / 2);
-const filters = stills
-  .map(
-    (s, i) =>
-      `[${i}]scale=360:-1,crop=360:400:0:${Math.round(640 * 0.62 - 200)},` +
-      `drawbox=y=ih-36:w=iw:h=36:color=black@0.7:t=fill,` +
-      `drawtext=text='${path.basename(s, ".png")}':fontcolor=white:fontsize=22:x=(w-tw)/2:y=h-29[v${i}]`,
-  )
-  .join(";");
-const blank = stills.length % 2 ? `;color=c=black:s=360x400[pad]` : "";
-const ids = stills.map((_, i) => `[v${i}]`).concat(stills.length % 2 ? ["[pad]"] : []);
-const layout =
-  `${ids.slice(0, cols).join("")}hstack=${cols}[top];` + `${ids.slice(cols).join("")}hstack=${cols}[bottom];[top][bottom]vstack`;
+// Planche de tous les styles, légendée, par rangées de 6.
+const COLS = 6;
+const cells = stills.map(
+  (s, i) =>
+    `[${i}]scale=360:-1,crop=360:400:0:${Math.round(640 * 0.62 - 200)},` +
+    `drawbox=y=ih-36:w=iw:h=36:color=black@0.7:t=fill,` +
+    `drawtext=text='${path.basename(s, ".png")}':fontcolor=white:fontsize=22:x=(w-tw)/2:y=h-29[v${i}]`,
+);
+const pads = (COLS - (stills.length % COLS)) % COLS;
+const padCells = Array.from({ length: pads }, (_, i) => `color=c=black:s=360x400[pad${i}]`);
+const ids = [...stills.map((_, i) => `[v${i}]`), ...padCells.map((_, i) => `[pad${i}]`)];
+const rows: string[] = [];
+for (let r = 0; r * COLS < ids.length; r++) rows.push(`${ids.slice(r * COLS, (r + 1) * COLS).join("")}hstack=${COLS}[row${r}]`);
+const layout = rows.length > 1 ? `${rows.map((_, r) => `[row${r}]`).join("")}vstack=${rows.length}` : "[row0]null";
 execFileSync("ffmpeg", [
   "-y",
   "-loglevel",
   "error",
   ...stills.flatMap((s) => ["-i", s]),
   "-filter_complex",
-  `${filters}${blank};${layout}`,
+  [...cells, ...padCells, ...rows, layout].join(";"),
   "-frames:v",
   "1",
   path.join(outDir, "catalogue.png"),

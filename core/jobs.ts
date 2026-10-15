@@ -1,5 +1,7 @@
 import path from "node:path";
-import { STYLES } from "../src/styles";
+import { styleFonts } from "./style-schema";
+import { allStyles, resolveStyle } from "./styles-store";
+import { ensureFonts } from "./fonts";
 import { DEFAULT_MODEL } from "./whisper";
 import { listProjects, projectDir, requireProject, sourcePath, updateProject, type Project } from "./projects";
 import { renderEdit } from "./render";
@@ -77,11 +79,15 @@ export const queueRender = (id: string) => {
     const p = requireProject(id);
     const file = `renders/${p.style}-${new Date().toISOString().replace(/[:.]/g, "-")}.mp4`;
     try {
+      const styleDef = resolveStyle(p.style);
+      if (!styleDef) throw new Error(`Le style « ${p.style} » n'existe plus : choisis-en un autre.`);
+      await ensureFonts(styleFonts(styleDef));
       const result = await renderEdit({
         videoPath: sourcePath(p),
         media: p.media,
         words: p.words!,
         style: p.style,
+        styleDef,
         overrides: p.overrides,
         settings: p.settings,
         outPath: path.join(projectDir(id), file),
@@ -122,5 +128,4 @@ export const recoverStaleJobs = () => {
   }
 };
 
-export const styleList = () =>
-  Object.entries(STYLES).map(([name, s]) => ({ name, label: s.label }));
+export const styleList = () => allStyles().map(({ name, label, custom }) => ({ name, label, custom }));

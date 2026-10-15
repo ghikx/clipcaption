@@ -3,7 +3,7 @@
 Sous-titres animés façon Submagic, 100 % en local, en français et en anglais. Une interface web pour transcrire, couper et styliser tes vidéos, et un serveur MCP pour que Claude puisse le faire à ta place.
 
 - **Transcription** : [whisper.cpp](https://github.com/ggerganov/whisper.cpp), timestamps mot par mot, sans API ni clé.
-- **Rendu** : [Remotion](https://www.remotion.dev) (React → MP4), 10 styles de sous-titres.
+- **Rendu** : [Remotion](https://www.remotion.dev) (React → MP4), 23 préréglages et un designer pour créer n'importe quel style, avec n'importe quelle police Google Fonts.
 - **Interface** : éditeur par le texte (couper un passage = barrer ses mots), aperçu en direct, export MP4.
 - **Claude** : serveur MCP, les projets créés par Claude apparaissent dans l'interface.
 
@@ -39,11 +39,27 @@ Puis ouvre **http://localhost:4321**.
    - `E` : mettre en avant (utilisé par `chenek`, `keyword`, `aesthetic`, `chaos`) ;
    - double-clic : corriger le mot ;
    - `⌘Z` / `⇧⌘Z` : annuler / rétablir ; `espace` : lecture.
-3. **Style** : 10 styles, couleur d'accent, taille, position, mots par écran, majuscules. L'aperçu est en direct.
+3. **Style** : 23 préréglages + tes styles perso. « + Créer un style » ouvre le designer (voir plus bas). Ajustements rapides : accent, taille, position, mots par écran, majuscules. L'aperçu est en direct.
 4. **Montage** : coupe automatique des silences (avec le réglage de la durée minimale), durée finale, changement de langue.
 5. **Export** : MP4 H.264 à la résolution d'origine, téléchargeable depuis l'onglet Export.
 
 Tout est sauvegardé automatiquement dans `workspace/projects/<projet>/` : la source, l'aperçu, la transcription et les exports.
+
+### Designer de styles
+
+Dans l'onglet Style, **+ Créer un style** part du style actuel ; le crayon ✎ modifie un style perso. Tout se règle, avec l'aperçu en direct sur ta vidéo :
+
+- **Typographie** : n'importe quelle police Google Fonts (tape son nom, elle est téléchargée en local), graisse, taille, interlettrage, interligne, majuscules, italique.
+- **Couleurs** : texte, mot prononcé, pastille, karaoké, fond derrière chaque mot, opacité des mots à venir, dégradé.
+- **Contour & ombre** : contour, ombre douce, portée, lueur néon, relief, ou CSS libre.
+- **Mot prononcé** : grossissement, inclinaison, soulignement.
+- **Mots importants** : taille, couleur, pastille, autre police, italique, inclinaison.
+- **Bloc de fond** : couleur, arrondi, flou (effet verre).
+- **Mise en page** : position, alignement, largeur, mots par écran.
+- **Animation** : écran entier / mot par mot / lettre par lettre ; entrée pop, rebond, montée, fondu, flou ; mode chaos.
+- **JSON** : le style complet, pour coller un style généré par Claude.
+
+Les styles perso sont enregistrés dans `workspace/styles/` et utilisables partout (interface, CLI, Claude).
 
 ### Google Drive
 
@@ -75,7 +91,10 @@ Pour Claude Desktop, ajoute dans `claude_desktop_config.json` :
 
 Si Claude Desktop ne trouve pas `node`, remplace `"node"` par son chemin complet (`which node`).
 
-Ensuite, demande simplement : *« Sous-titre ~/Desktop/interview.mp4 en style chenek et coupe les silences »*.
+Ensuite, demande simplement :
+
+- *« Sous-titre ~/Desktop/interview.mp4 en style chenek et coupe les silences »*
+- *« Crée-moi un style de sous-titres façon néon avec la police Righteous, montre-le sur mon dernier projet »* : Claude crée le style, reçoit une image d'aperçu, la regarde et corrige si besoin.
 
 | Outil | Rôle |
 |---|---|
@@ -85,7 +104,11 @@ Ensuite, demande simplement : *« Sous-titre ~/Desktop/interview.mp4 en style ch
 | `render_project` | Exporte avec les réglages actuels |
 | `get_project` / `list_projects` | Suivi des projets |
 | `transcribe_again` | Retranscrit, par exemple dans une autre langue |
-| `list_styles` | Styles disponibles |
+| `list_styles` / `get_style` | Styles disponibles et leur définition complète |
+| `create_style` / `update_style` | Crée ou modifie un style perso ; rend une image d'aperçu que Claude voit |
+| `preview_style` | Image d'un style (ou d'une variante non enregistrée), sur un projet ou une phrase d'exemple |
+| `delete_style` | Supprime un style perso |
+| `install_font` / `list_fonts` | Installe une police Google Fonts / liste les polices locales |
 
 Si un traitement dépasse ~50 s, l'outil rend la main avec le statut, et Claude suit avec `get_project`. Le traitement continue tant que Claude reste ouvert.
 
@@ -111,24 +134,43 @@ Dans le JSON, tu peux corriger le texte, passer `"emphasis"` à `true`/`false` o
 
 ## Styles
 
+23 préréglages (`npm run preview` génère la planche `out/styles/catalogue.png`) :
+
 | Style | Rendu |
 |---|---|
-| `chenek` | DA Chenek Crea : grotesque serrée, mot prononcé sur pastille citron, mots importants en italique fine |
+| `chenek` | DA Chenek Crea : grotesque serrée, pastille citron, mots importants en italique fine |
 | `submagic` | Groupe de mots, pastille violette sur le mot prononcé |
 | `hormozi` | Texte condensé, mot prononcé en jaune |
+| `beast` | Police cartoon, contour épais, mot prononcé vert et penché |
+| `bebas` | Grand condensé, mot rouge, entrée par le bas |
 | `oneword` | Un seul mot à l'écran, blanc, sobre |
 | `karaoke` | Les mots se remplissent de couleur au fil de la voix |
 | `keyword` | Phrase en blanc, mots importants plus gros et en vert |
 | `aesthetic` | Sans-serif fin + serif italique sur le mot important |
-| `chaos` | Les mots surgissent un par un, tailles, angles, couleurs et polices variés |
-| `typewriter` | Lettres qui s'écrivent au rythme de la voix, sur fond noir |
-| `podcast` | Bloc de texte sur fond sombre, mot prononcé en jaune |
+| `editorial` | Serif italique crème, mot prononcé souligné, entrée floue |
+| `serif` | Grand serif, pastille blanche |
+| `neon` | Lueur cyan, mot prononcé magenta |
+| `retro` | Relief décalé rose et cyan |
+| `gradient` | Mot prononcé en dégradé jaune-rose |
+| `marker` | Écriture feutre, surligneur jaune |
+| `boxed` | Chaque mot sur fond blanc (TikTok classique) |
+| `glass` | Bloc translucide flouté |
+| `podcast` | Bloc sur fond sombre, mot prononcé en jaune |
+| `docu` | Bandeau bas aligné à gauche, façon documentaire |
+| `chaos` | Mots qui surgissent, tailles, angles, couleurs et polices variés |
+| `rise` | Les mots arrivent par le bas un par un |
+| `dream` | Les mots sortent du flou |
+| `typewriter` | Lettres qui s'écrivent au rythme de la voix |
 
 ```bash
 npm run preview   # régénère out/styles/catalogue.png et les vignettes de l'interface
 ```
 
 Les mots importants sont choisis automatiquement, en local : chiffres, mots longs hors mots-outils (FR + EN), espacés d'au moins 1,2 s.
+
+## Pourquoi pas Vercel
+
+L'outil tourne sur ta machine : whisper.cpp (binaire natif + modèle de 1,6 Go), ffmpeg, Chrome pour le rendu, fichiers sur disque et traitements de plusieurs minutes. Les fonctions Vercel sont limitées en taille, en durée et sans disque persistant. Une version en ligne demanderait de remplacer la transcription par une API (Deepgram, AssemblyAI), le rendu par Remotion Lambda sur AWS et le stockage par un service de fichiers.
 
 ## Limites connues
 

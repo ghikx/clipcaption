@@ -3,9 +3,10 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaptionedVideo, type CaptionedVideoProps } from "../src/CaptionedVideo";
 import { buildEdit, type EditSettings } from "../src/edit";
 import { toOutputMs, type Segment } from "../src/segments";
-import { STYLES, type StyleName, type StyleOverrides } from "../src/styles";
+import { STYLES, type CaptionStyle, type StyleName, type StyleOverrides } from "../src/styles";
+import { StyleDesigner } from "./StyleDesigner";
 import type { Word } from "../src/words";
-import { api, formatTime, isBusy, mediaUrl, statusLabel, type Project } from "./api";
+import { api, formatTime, isBusy, mediaUrl, statusLabel, type Project, type StyleInfo } from "./api";
 import { Logo } from "./App";
 
 type Tab = "style" | "montage" | "export";
@@ -52,6 +53,11 @@ export const Editor = ({ id }: { id: string }) => {
   const [past, setPast] = useState<Word[][]>([]);
   const [future, setFuture] = useState<Word[][]>([]);
   const [style, setStyle] = useState<StyleName>("chenek");
+  const [styles, setStyles] = useState<StyleInfo[]>([]);
+  // Designer ouvert : style en cours d'édition (id si style perso existant).
+  const [designer, setDesigner] = useState<{ id?: string; base?: string; name: string; draft: CaptionStyle } | null>(null);
+  const [designerSaving, setDesignerSaving] = useState(false);
+  const [designerError, setDesignerError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<StyleOverrides>({});
   const [settings, setSettings] = useState<EditSettings>({ cutSilences: false, minSilenceMs: 500 });
   const [name, setName] = useState("");
@@ -83,6 +89,17 @@ export const Editor = ({ id }: { id: string }) => {
   useEffect(() => {
     api.project(id).then((p) => applyServer(p, true), (e) => setLoadError(e.message));
   }, [id, applyServer]);
+
+  const loadStyles = useCallback(() => api.styles().then(setStyles).catch(() => {}), []);
+  useEffect(() => {
+    loadStyles();
+  }, [loadStyles]);
+  // Les vignettes des styles perso sont rendues après l'enregistrement : on les recharge.
+  useEffect(() => {
+    if (!styles.some((s) => s.custom && !s.thumb)) return;
+    const t = setTimeout(loadStyles, 2500);
+    return () => clearTimeout(t);
+  }, [styles, loadStyles]);
 
   const busy = project ? isBusy(project) : false;
   const waitingPreview = project ? !project.preview : false;
@@ -162,6 +179,11 @@ export const Editor = ({ id }: { id: string }) => {
     return buildEdit(words, settings, media.durationMs, media.fps);
   }, [words, settings, media]);
 
+  const currentStyle = styles.find((s) => s.name === style);
+  const currentDef: CaptionStyle = currentStyle?.definition ?? (STYLES as Record<string, CaptionStyle>)[style] ?? STYLES.chenek;
+  // Pendant le design, l'aperçu montre le brouillon tel quel (sans ajustements rapides).
+  const previewDef = designer?.draft ?? currentDef;
+
   const inputProps = useMemo<CaptionedVideoProps | null>(() => {
     if (!project || !edit) return null;
     return {
@@ -170,7 +192,8 @@ export const Editor = ({ id }: { id: string }) => {
       captions: words ?? [],
       segments: edit.segments,
       style,
-      overrides,
+      styleDef: previewDef,
+      overrides: designer ? undefined : overrides,
       width: project.media.width,
       height: project.media.height,
       fps: project.media.fps,
@@ -178,7 +201,38 @@ export const Editor = ({ id }: { id: string }) => {
     };
     // project.source/media ne changent pas après le chargement.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, project?.preview, edit, words, style, overrides]);
+  }, [project?.id, project?.preview, edit, words, style, overrides, previewDef, designer]);
+
+  const pickStyle = (name: string) => {
+    setStyle(name);
+    markDirty();
+  };
+
+  const saveDesign = async () => {
+    if (!designer) return;
+    setDesignerSaving(true);
+    setDesignerError(null);
+    try {
+      const saved = designer.id
+        ? await api.updateStyle(designer.id, designer.name, designer.draft)
+        : await api.createStyle(designer.name, designer.base, designer.draft);
+      await loadStyles();
+      pickStyle(saved.id);
+      setDesigner(null);
+    } catch (e) {
+      setDesignerError((e as Error).message);
+    } finally {
+      setDesignerSaving(false);
+    }
+  };
+
+  const removeStyle = async (sid: string) => {
+    if (!confirm("Supprimer ce style ? Les projets qui l'utilisent repasseront sur chenek.")) return;
+    await api.deleteStyle(sid);
+    if (style === sid) pickStyle("chenek");
+    setDesigner(null);
+    loadStyles();
+  };
 
   // Mot prononcé : mis à jour seulement quand il change, pas à chaque frame.
   useEffect(() => {
@@ -407,7 +461,7 @@ export const Editor = ({ id }: { id: string }) => {
           )}
         </section>
 
-        <aside className="inspector card">
+        <aside className={`inspector card ${designer ? "designing" : ""}`}>
           <div className="tabs">
             {(["style", "montage", "export"] as Tab[]).map((t) => (
               <button key={t} className={`pill mono ${tab === t ? "on" : ""}`} onClick={() => setTab(t)}>
@@ -416,25 +470,61 @@ export const Editor = ({ id }: { id: string }) => {
             ))}
           </div>
 
-          {tab === "style" && (
-            <div className="tab-body">
-              <div className="style-grid">
-                {(Object.keys(STYLES) as StyleName[]).map((s) => (
-                  <button
-                    key={s}
-                    className={`style-card ${style === s ? "on" : ""}`}
-                    onClick={() => {
-                      setStyle(s);
-                      markDirty();
-                    }}
-                  >
-                    <img src={`/styles/${s}.jpg`} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
-                    <span className="mono">{s}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="muted small style-desc">{STYLES[style].label}</p>
+          {tab === "style" && designer && (
+            <StyleDesigner
+              draft={designer.draft}
+              onChange={(d) => setDesigner({ ...designer, draft: d })}
+              name={designer.name}
+              onName={(n) => setDesigner({ ...designer, name: n })}
+              editing={!!designer.id}
+              saving={designerSaving}
+              error={designerError}
+              onCancel={() => setDesigner(null)}
+              onSave={saveDesign}
+              onDelete={designer.id ? () => removeStyle(designer.id!) : undefined}
+            />
+          )}
 
+          {tab === "style" && !designer && (
+            <div className="tab-body">
+              <button
+                className="btn primary wide design-btn"
+                onClick={() => {
+                  setDesignerError(null);
+                  setDesigner({ name: `${currentStyle?.label.split(" :")[0] ?? "Mon"} perso`, base: style, draft: { ...currentDef } });
+                }}
+              >
+                + Créer un style
+              </button>
+              {styles.some((s) => s.custom) && <span className="mono label small">Mes styles</span>}
+              <div className="style-grid">
+                {styles
+                  .filter((s) => s.custom)
+                  .map((s) => (
+                    <StyleCard
+                      key={s.name}
+                      s={s}
+                      on={style === s.name}
+                      onPick={() => pickStyle(s.name)}
+                      onEdit={() => {
+                        setDesignerError(null);
+                        setDesigner({ id: s.name, name: s.label, draft: { ...s.definition } });
+                      }}
+                    />
+                  ))}
+              </div>
+              <span className="mono label small">Préréglages · {styles.filter((s) => !s.custom).length}</span>
+              <div className="style-grid">
+                {styles
+                  .filter((s) => !s.custom)
+                  .map((s) => (
+                    <StyleCard key={s.name} s={s} on={style === s.name} onPick={() => pickStyle(s.name)} />
+                  ))}
+              </div>
+              <p className="muted small style-desc">{currentStyle?.custom ? currentStyle.label : currentDef.label}</p>
+
+              <div className="divider" />
+              <span className="mono label">Ajustements rapides</span>
               <div className="field-group">
                 <span className="mono label small">Accent</span>
                 <div className="swatches">
@@ -454,8 +544,8 @@ export const Editor = ({ id }: { id: string }) => {
               </div>
 
               <Slider label="Taille" value={overrides.sizeScale ?? 1} min={0.6} max={1.6} step={0.05} format={(v) => `${Math.round(v * 100)} %`} onChange={(v) => setOv({ sizeScale: v })} />
-              <Slider label="Position" value={overrides.position ?? STYLES[style].verticalPosition} min={0.12} max={0.9} step={0.01} format={(v) => `${Math.round(v * 100)} %`} onChange={(v) => setOv({ position: v })} />
-              <Slider label="Mots par écran" value={overrides.maxWords ?? STYLES[style].maxWords} min={1} max={8} step={1} format={(v) => String(v)} onChange={(v) => setOv({ maxWords: v })} />
+              <Slider label="Position" value={overrides.position ?? currentDef.verticalPosition} min={0.12} max={0.9} step={0.01} format={(v) => `${Math.round(v * 100)} %`} onChange={(v) => setOv({ position: v })} />
+              <Slider label="Mots par écran" value={overrides.maxWords ?? currentDef.maxWords} min={1} max={8} step={1} format={(v) => String(v)} onChange={(v) => setOv({ maxWords: v })} />
 
               <div className="field-group row">
                 <span className="mono label small">Majuscules</span>
@@ -478,7 +568,7 @@ export const Editor = ({ id }: { id: string }) => {
                   markDirty();
                 }}
               >
-                Réinitialiser le style
+                Réinitialiser les ajustements
               </button>
             </div>
           )}
@@ -509,6 +599,25 @@ export const Editor = ({ id }: { id: string }) => {
     </div>
   );
 };
+
+const StyleCard = ({ s, on, onPick, onEdit }: { s: StyleInfo; on: boolean; onPick: () => void; onEdit?: () => void }) => (
+  <div className={`style-card ${on ? "on" : ""}`} onClick={onPick} role="button" tabIndex={0}>
+    {s.thumb ? <img src={s.thumb} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <div className="thumb-wait mono small">Aperçu…</div>}
+    <span className="mono">{s.custom ? s.label : s.name}</span>
+    {onEdit && (
+      <button
+        className="style-edit"
+        title="Modifier"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+      >
+        ✎
+      </button>
+    )}
+  </div>
+);
 
 const Slider = ({
   label,

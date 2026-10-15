@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { EditSettings } from "../src/edit";
-import { isStyleName, type StyleName, type StyleOverrides } from "../src/styles";
+import type { StyleName, StyleOverrides } from "../src/styles";
+import { styleExists } from "./styles-store";
 import type { Word } from "../src/words";
 import { makePreview, probe, thumbnail, type MediaInfo } from "./media";
 import { PROJECTS_DIR } from "./paths";
@@ -124,7 +125,7 @@ export const createProject = async (
       progress: 0,
       message: null,
       words: null,
-      style: isStyleName(style) ? style : "chenek",
+      style: styleExists(style) ? style : "chenek",
       overrides: {},
       settings: { cutSilences: false, minSilenceMs: 500 },
       renders: [],

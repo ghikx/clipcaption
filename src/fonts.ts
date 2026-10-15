@@ -1,19 +1,30 @@
 import { loadFont } from "@remotion/fonts";
-import { staticFile } from "remotion";
+import { continueRender, delayRender, staticFile } from "remotion";
 
-// Polices embarquées dans public/fonts (sous-ensemble latin de Google Fonts, licence OFL) :
-// le rendu ne dépend pas du réseau. Montserrat et Inter sont des polices variables.
-const FONTS = [
-  { family: "Montserrat", file: "Montserrat.woff2", weight: "100 900", style: "normal" },
-  { family: "Inter", file: "Inter.woff2", weight: "100 900", style: "normal" },
-  { family: "Anton", file: "Anton-400.woff2", weight: "400", style: "normal" },
-  { family: "Instrument Serif", file: "InstrumentSerif-Italic.woff2", weight: "400", style: "italic" },
-  { family: "Space Mono", file: "SpaceMono-700.woff2", weight: "700", style: "normal" },
-  { family: "Inter Tight", file: "InterTight.woff2", weight: "100 900", style: "normal" },
-  { family: "Inter Tight", file: "InterTight-Italic.woff2", weight: "100 900", style: "italic" },
-  { family: "Geist Mono", file: "GeistMono.woff2", weight: "100 900", style: "normal" },
-] as const;
+// Polices locales listées dans public/fonts/manifest.json (Google Fonts, licence OFL) :
+// le rendu ne dépend pas du réseau. De nouvelles polices s'installent depuis
+// l'interface ou par Claude (core/fonts.ts), d'où le chargement à l'exécution.
+type FontEntry = { family: string; file: string; weight: string; style: "normal" | "italic" };
 
-for (const f of FONTS) {
-  loadFont({ family: f.family, url: staticFile(`fonts/${f.file}`), weight: f.weight, style: f.style });
-}
+const loaded = new Set<string>();
+
+export const refreshFonts = async () => {
+  const res = await fetch(staticFile("fonts/manifest.json"), { cache: "no-store" });
+  const manifest: FontEntry[] = await res.json();
+  await Promise.all(
+    manifest
+      .filter((f) => !loaded.has(f.file))
+      .map(async (f) => {
+        loaded.add(f.file);
+        await loadFont({ family: f.family, url: staticFile(`fonts/${f.file}`), weight: f.weight, style: f.style }).catch(() =>
+          loaded.delete(f.file),
+        );
+      }),
+  );
+  return manifest;
+};
+
+const handle = delayRender("Chargement des polices");
+refreshFonts()
+  .catch((e) => console.error("Polices :", e))
+  .finally(() => continueRender(handle));
