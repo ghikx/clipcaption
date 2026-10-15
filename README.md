@@ -13,6 +13,10 @@ Sous-titres animés façon Submagic, 100 % en local, en français et en anglais.
 - `ffmpeg` et `ffprobe` dans le PATH (`brew install ffmpeg` sur macOS)
 - macOS/Linux : un compilateur C (`xcode-select --install` sur macOS), car whisper.cpp est compilé à l'installation
 
+## Démarrage rapide (Mac)
+
+Une fois le projet téléchargé (voir Installation), double-clique sur **`Lancer clipcaption.command`** dans le dossier : il installe ce qui manque au premier lancement, démarre l'outil et ouvre http://localhost:4321 dans le navigateur. Laisse la fenêtre du Terminal ouverte pendant que tu travailles.
+
 ## Installation (une fois)
 
 ```bash
