@@ -6,6 +6,7 @@ import { ensureFonts } from "./fonts";
 import { DEFAULT_MODEL } from "./whisper";
 import { listProjects, projectDir, requireProject, sourcePath, updateProject, type Project } from "./projects";
 import { renderEdit } from "./render";
+import { renderSource } from "./media";
 import { transcribeFile, type Language } from "./transcribe";
 
 // File d'attente par processus : une transcription ou un rendu à la fois, sinon la
@@ -100,9 +101,10 @@ export const queueRender = (id: string) => {
       const styleDef = resolveStyle(p.style);
       if (!styleDef) throw new Error(`Le style « ${p.style} » n'existe plus : choisis-en un autre.`);
       await ensureFonts(styleFonts(styleDef));
+      const src = await renderSource(sourcePath(p), path.join(projectDir(id), "render-source.mp4"), p.media);
       const result = await renderEdit({
-        videoPath: sourcePath(p),
-        media: p.media,
+        videoPath: src.file,
+        media: src.media,
         words: p.words!,
         style: p.style,
         styleDef,

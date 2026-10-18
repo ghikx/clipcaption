@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { probe } from "../core/media";
+import { probe, renderSource } from "../core/media";
 import { PUBLIC_DIR, ROOT } from "../core/paths";
 import { renderEdit } from "../core/render";
 import { transcribeFile, type Language } from "../core/transcribe";
@@ -84,9 +84,10 @@ if (!values["no-render"]) {
   if (cut && words.length === 0) console.warn("Aucun mot transcrit : --cut-silences ignoré.");
   console.log("Rendu…");
   const outPath = path.join(ROOT, "out", `${name}.${style}${cut ? ".cut" : ""}.mp4`);
+  const src = await renderSource(path.resolve(input), path.join(ROOT, "out", `${name}.render-source.mp4`), media);
   const result = await renderEdit({
-    videoPath: path.resolve(input),
-    media,
+    videoPath: src.file,
+    media: src.media,
     words,
     style,
     settings: { cutSilences: cut && words.length > 0, minSilenceMs },

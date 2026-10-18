@@ -215,6 +215,7 @@ L'outil tourne sur ta machine : whisper.cpp (binaire natif + modèle de 1,6 Go),
 ## Dépannage
 
 - **Export en erreur « Target closed »** : le Chrome qui fabrique la vidéo a planté (mémoire ou carte graphique). L'export se relance automatiquement une fois en mode sûr (un seul onglet, rendu logiciel). Si ça arrive souvent, lance toujours en mode sûr : `CLIPCAPTION_SAFE_RENDER=1 ./"Lancer clipcaption.command"`, ou limite le parallélisme avec `CLIPCAPTION_CONCURRENCY=2`.
+- **Export lent, ou erreur « Could not extract frame from compositor » / « EPIPE »** : vidéos iPhone en 4K, 60 i/s ou HDR. Avant chaque export, clipcaption en fait une copie simple (H.264 1080p, ≤ 30 i/s, couleurs SDR) dans le projet (`render-source.mp4`, refaite seulement si la source change). L'export final sort donc en 1080p, ce que demandent Instagram et TikTok. Pour garder la résolution d'origine : `CLIPCAPTION_FULL_RES=1 ./"Lancer clipcaption.command"` (plus lent, et peut replanter sur du HDR).
 
 ## Limites connues
 
