@@ -24,6 +24,35 @@ const setPref = (key: string, value: string) => {
   }
 };
 
+// Nom du fichier téléchargé : le nom du projet, sans suffixe.
+const fileName = (p: { name: string }) => `${p.name.replace(/[\\/:*?"<>|]+/g, "-").trim() || "video"}.mp4`;
+
+// Chrome (File System Access) : écrit directement dans un dossier choisi une seule fois.
+type DirHandle = {
+  getFileHandle: (name: string, opts?: { create?: boolean }) => Promise<{ createWritable: () => Promise<WritableStream> }>;
+};
+const pickFolder = (window as unknown as { showDirectoryPicker?: (o?: { mode?: string; id?: string }) => Promise<DirHandle> }).showDirectoryPicker;
+
+// Ne remplace jamais un fichier déjà présent (ex. la vidéo d'origine du même nom) : « nom 2.mp4 ».
+const freeName = async (dir: DirHandle, name: string) => {
+  const base = name.replace(/\.mp4$/, "");
+  for (let i = 1; ; i++) {
+    const candidate = i === 1 ? name : `${base} ${i}.mp4`;
+    try {
+      await dir.getFileHandle(candidate);
+    } catch {
+      return candidate;
+    }
+  }
+};
+
+const download = (id: string, file: string, name: string) => {
+  const a = document.createElement("a");
+  a.href = mediaUrl(id, file);
+  a.download = name;
+  a.click();
+};
+
 const isVideo = (f: File) => f.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name);
 
 export const Home = () => {
@@ -383,16 +412,36 @@ const BulkBar = ({
     }
   };
 
-  // Téléchargement du dernier export de chaque projet (Chrome demande une fois l'autorisation).
-  const downloadAll = () => {
-    withExport.forEach((p, i) =>
-      setTimeout(() => {
-        const a = document.createElement("a");
-        a.href = mediaUrl(p.id, p.renders[0].file);
-        a.download = `${p.name}.sous-titres.mp4`;
-        a.click();
-      }, i * 400),
-    );
+  // Dernier export de chaque projet. Dans Chrome : un seul choix de dossier, puis tous les
+  // fichiers y sont écrits sans autre confirmation. Ailleurs : téléchargements classiques.
+  const downloadAll = async () => {
+    if (!pickFolder) {
+      withExport.forEach((p, i) => setTimeout(() => download(p.id, p.renders[0].file, fileName(p)), i * 400));
+      return;
+    }
+    let dir: DirHandle;
+    try {
+      dir = await pickFolder.call(window, { mode: "readwrite", id: "clipcaption-exports" });
+    } catch {
+      return; // choix du dossier annulé
+    }
+    setBusy(true);
+    let done = 0;
+    const failed: string[] = [];
+    for (const p of withExport) {
+      setMessage(`Téléchargement ${done + 1}/${withExport.length} : ${p.name}`);
+      try {
+        const res = await fetch(mediaUrl(p.id, p.renders[0].file));
+        if (!res.ok || !res.body) throw new Error(`Erreur ${res.status}`);
+        const file = await dir.getFileHandle(await freeName(dir, fileName(p)), { create: true });
+        await res.body.pipeTo(await file.createWritable());
+        done++;
+      } catch {
+        failed.push(p.name);
+      }
+    }
+    setBusy(false);
+    setMessage(failed.length ? `${done} téléchargé(s), échec : ${failed.join(", ")}` : `${done} vidéo(s) enregistrée(s) dans le dossier choisi.`);
   };
 
   return (
@@ -416,7 +465,12 @@ const BulkBar = ({
       <button className="btn primary small" disabled={busy} onClick={() => run("export")}>
         Exporter {ids.length > 1 ? `les ${ids.length}` : ""}
       </button>
-      <button className="btn small" disabled={!withExport.length} onClick={downloadAll} title="Dernier export de chaque projet">
+      <button
+        className="btn small"
+        disabled={busy || !withExport.length}
+        onClick={downloadAll}
+        title={pickFolder ? "Choisis un dossier : tous les derniers exports y sont enregistrés d'un coup" : "Dernier export de chaque projet"}
+      >
         Télécharger ({withExport.length})
       </button>
       <button className="btn small danger" disabled={busy} onClick={() => run("delete")}>
@@ -494,10 +548,7 @@ const ProjectCard = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            const a = document.createElement("a");
-            a.href = mediaUrl(p.id, last.file);
-            a.download = `${p.name}.sous-titres.mp4`;
-            a.click();
+            download(p.id, last.file, fileName(p));
           }}
         >
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">

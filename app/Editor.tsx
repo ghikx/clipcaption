@@ -1109,7 +1109,7 @@ const ExportTab = ({
             <a className="chip" href={mediaUrl(project.id, r.file)} target="_blank" rel="noreferrer">
               Voir
             </a>
-            <a className="chip on" href={mediaUrl(project.id, r.file)} download={`${project.name}-${r.style}.mp4`}>
+            <a className="chip on" href={mediaUrl(project.id, r.file)} download={`${project.name}.mp4`}>
               Télécharger
             </a>
           </div>
