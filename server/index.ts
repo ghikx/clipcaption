@@ -7,7 +7,7 @@ import path from "node:path";
 import multer from "multer";
 import { downloadFromDrive, driveRoots } from "../core/drive";
 import { configToProject, expandHome, getConfig, listConfigs, saveConfig } from "../core/configs";
-import { queueRender, queueTranscription, recoverStaleJobs } from "../core/jobs";
+import { cancelJob, queueRender, queueTranscription, recoverStaleJobs } from "../core/jobs";
 import { PUBLIC_DIR, ROOT, UI_PORT } from "../core/paths";
 import {
   createProject,
@@ -183,6 +183,7 @@ app.post(
   route(async (req, res) => {
     const { file, name } = await downloadFromDrive(String(req.body.url ?? ""));
     const project = await createProject(file, { name, lang: asLang(req.body.lang), move: true });
+    applyConfig(project.id, req.body.config, req.body.autoExport === true);
     ensurePreview(project.id);
     background(queueTranscription(project.id));
     res.status(201).json(getProject(project.id));
@@ -251,6 +252,11 @@ app.post(
     const ids: string[] = Array.isArray(req.body.ids) ? req.body.ids.map(String) : [];
     const results = ids.map((id) => {
       try {
+        if (req.body.action === "delete") {
+          cancelJob(id);
+          deleteProject(id);
+          return { id, ok: true };
+        }
         if (req.body.config) applyConfig(id, req.body.config);
         if (req.body.action === "export") {
           const p = requireProject(id);
@@ -271,6 +277,7 @@ app.post(
 );
 
 app.delete("/api/projects/:id", (req, res) => {
+  cancelJob(pid(req));
   deleteProject(pid(req));
   res.status(204).end();
 });

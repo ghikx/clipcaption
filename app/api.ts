@@ -40,10 +40,11 @@ export const api = {
   updateStyle: (id: string, name: string, changes: CaptionStyle) => send("PUT", `/api/styles/${id}`, { name, changes }).then(json<{ id: string }>),
   deleteStyle: (id: string) => send("DELETE", `/api/styles/${id}`).then(json<void>),
   configs: () => fetch("/api/configs").then(json<ConfigInfo[]>),
-  bulk: (ids: string[], body: { action?: "export"; config?: string }) =>
+  bulk: (ids: string[], body: { action?: "export" | "delete"; config?: string }) =>
     send("POST", "/api/projects/bulk", { ids, ...body }).then(json<{ id: string; ok?: boolean; queued?: string; error?: string }[]>),
   saveConfig: (config: Record<string, unknown>) => send("POST", "/api/configs", config).then(json<unknown>),
-  importDrive: (url: string, lang: string) => send("POST", "/api/projects/drive", { url, lang }).then(json<Project>),
+  importDrive: (url: string, lang: string, opts: { config?: string; autoExport?: boolean } = {}) =>
+    send("POST", "/api/projects/drive", { url, lang, ...opts }).then(json<Project>),
 
   // XHR plutôt que fetch : seul XHR donne la progression de l'envoi.
   upload: (file: File, lang: string, onProgress: (p: number) => void, opts: { config?: string; autoExport?: boolean } = {}) =>

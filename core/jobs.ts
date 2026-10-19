@@ -4,7 +4,8 @@ import { styleFonts } from "./style-schema";
 import { allStyles, resolveStyle } from "./styles-store";
 import { ensureFonts } from "./fonts";
 import { DEFAULT_MODEL } from "./whisper";
-import { listProjects, projectDir, requireProject, sourcePath, updateProject, type Project } from "./projects";
+import { getProject, listProjects, projectDir, requireProject, sourcePath, updateProject, type Project } from "./projects";
+import { makeCancelSignal } from "@remotion/renderer";
 import { renderEdit } from "./render";
 import { renderSource } from "./media";
 import { transcribeFile, type Language } from "./transcribe";
@@ -17,6 +18,10 @@ const enqueue = <T>(task: () => Promise<T>): Promise<T> => {
   queue = next.catch(() => {});
   return next;
 };
+
+// Rendus en cours, pour les arrêter quand on supprime le projet.
+const cancels = new Map<string, () => void>();
+export const cancelJob = (id: string) => cancels.get(id)?.();
 
 export const safeName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, "-").trim() || "video";
 
@@ -63,21 +68,27 @@ export const queueTranscription = (id: string, lang?: Language) => {
     if (lang) p.lang = lang;
   });
   return enqueue(async () => {
-    const p = requireProject(id);
+    // Projet supprimé pendant qu'il attendait dans la file : on saute la tâche.
+    const p = getProject(id);
+    if (!p) throw new Error("Projet supprimé.");
     try {
       const words = await transcribeFile(sourcePath(p), {
         lang: p.lang,
         model: (process.env.CLIPCAPTION_MODEL as typeof DEFAULT_MODEL) || DEFAULT_MODEL,
         onProgress: progressWriter(id, "transcribing"),
       });
+      const exportAfter = Boolean(p.autoExport);
       const done = updateProject(id, (proj) => {
         proj.words = words;
         proj.status = "ready";
         proj.progress = 1;
+        // L'export automatique ne vaut que pour cette transcription : une nouvelle
+        // transcription (changement de langue…) ne doit pas relancer un export.
+        proj.autoExport = false;
       });
-      // Export automatique : mis en file après la transcription, sans attendre ici
-      // (sinon la file attendrait sa propre tâche).
-      if (done.autoExport) queueMicrotask(() => queueRender(id).catch(() => {}));
+      // Mis en file après la transcription, sans attendre ici (sinon la file attendrait
+      // sa propre tâche).
+      if (exportAfter) queueMicrotask(() => queueRender(id).catch(() => {}));
       return done;
     } catch (e) {
       return fail(id, e);
@@ -95,14 +106,19 @@ export const queueRender = (id: string) => {
     p.jobPid = process.pid;
   });
   return enqueue(async () => {
-    const p = requireProject(id);
+    // Projet supprimé pendant qu'il attendait dans la file : on saute la tâche.
+    const p = getProject(id);
+    if (!p) throw new Error("Projet supprimé.");
     const file = `renders/${p.style}-${new Date().toISOString().replace(/[:.]/g, "-")}.mp4`;
     try {
       const styleDef = resolveStyle(p.style);
       if (!styleDef) throw new Error(`Le style « ${p.style} » n'existe plus : choisis-en un autre.`);
       await ensureFonts(styleFonts(styleDef));
       const src = await renderSource(sourcePath(p), path.join(projectDir(id), "render-source.mp4"), p.media);
+      const { cancelSignal, cancel } = makeCancelSignal();
+      cancels.set(id, cancel);
       const result = await renderEdit({
+        cancelSignal,
         videoPath: src.file,
         media: src.media,
         words: p.words!,
@@ -122,6 +138,8 @@ export const queueRender = (id: string) => {
       return { file, absolutePath: result.outPath, copiedTo };
     } catch (e) {
       return fail(id, e);
+    } finally {
+      cancels.delete(id);
     }
   });
 };

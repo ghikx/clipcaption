@@ -1271,8 +1271,13 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
 }
 
-.upload-options .d-row select {
+.upload-options .d-row select,
+.config-row select {
   max-width: 62%;
+}
+
+.config-row {
+  margin-bottom: 4px;
 }
 
 .upload-list {
@@ -1306,6 +1311,23 @@ input[type="range"]::-moz-range-thumb {
 
 .select-all {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.select-all:hover {
+  color: var(--text);
+}
+
+.select-all input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .bulk-bar {
@@ -1583,6 +1605,13 @@ textarea.json {
 
 /* ---------- responsive ---------- */
 
+/* Écrans tactiles : pas de survol, donc cases de sélection toujours visibles. */
+@media (hover: none) {
+  .select-box {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 1180px) {
   .editor {
     height: auto;
@@ -1641,5 +1670,26 @@ textarea.json {
   .editor-top .back,
   .editor-top .save {
     display: none;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .bulk-bar {
+    top: 8px;
+    padding: 10px 12px;
+  }
+  .bulk-bar select {
+    flex: 1 1 100%;
+  }
+  .bulk-bar .btn {
+    flex: 1 1 auto;
+  }
+  .upload-options .d-row {
+    flex-wrap: wrap;
+  }
+  .upload-options .d-row select {
+    max-width: 100%;
+    flex: 1 1 100%;
   }
 }

@@ -1,5 +1,5 @@
 import { bundle } from "@remotion/bundler";
-import { renderMedia, renderStill, selectComposition } from "@remotion/renderer";
+import { renderMedia, renderStill, selectComposition, type CancelSignal } from "@remotion/renderer";
 import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -75,6 +75,7 @@ export type RenderOptions = {
   settings: EditSettings;
   outPath: string;
   onProgress?: (p: number) => void;
+  cancelSignal?: CancelSignal;
 };
 
 export const renderEdit = async (o: RenderOptions) => {
@@ -120,6 +121,7 @@ export const renderEdit = async (o: RenderOptions) => {
               : {}),
           ...opts,
           outputLocation: o.outPath,
+          cancelSignal: o.cancelSignal,
           onProgress: ({ progress }) => o.onProgress?.(progress),
         });
       },

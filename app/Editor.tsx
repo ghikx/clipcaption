@@ -6,7 +6,7 @@ import { toOutputMs, type Segment } from "../src/segments";
 import { STYLES, type CaptionStyle, type StyleName, type StyleOverrides } from "../src/styles";
 import { StyleDesigner } from "./StyleDesigner";
 import type { Word } from "../src/words";
-import { api, formatTime, isBusy, mediaUrl, statusLabel, type Project, type StyleInfo } from "./api";
+import { api, formatTime, isBusy, mediaUrl, statusLabel, type ConfigInfo, type Project, type StyleInfo } from "./api";
 import { Logo } from "./App";
 
 type Tab = "style" | "montage" | "export";
@@ -67,7 +67,9 @@ export const Editor = ({ id }: { id: string }) => {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const player = useRef<PlayerRef>(null);
   const dirty = useRef(false);
+  const inFlight = useRef(false);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const [configs, setConfigs] = useState<ConfigInfo[]>([]);
 
   // Chargement initial, puis suivi tant qu'un traitement tourne.
   const applyServer = useCallback((p: Project, initial: boolean) => {
@@ -78,16 +80,27 @@ export const Editor = ({ id }: { id: string }) => {
       if (initial || !current || !p.words || p.words.length !== current.length) return p.words;
       return current;
     });
-    if (initial) {
+    // Réglages changés ailleurs (configuration appliquée depuis la page Projets, par Claude…) :
+    // on les reprend, sauf si une modification locale n'est pas encore enregistrée, pour que
+    // la sauvegarde automatique de l'éditeur ne les écrase pas.
+    if (initial || (!dirty.current && !inFlight.current)) {
       setStyle(p.style);
       setOverrides(p.overrides ?? {});
       setSettings(p.settings);
-      setName(p.name);
+      if (initial) setName(p.name);
     }
   }, []);
 
   useEffect(() => {
     api.project(id).then((p) => applyServer(p, true), (e) => setLoadError(e.message));
+    api.configs().then(setConfigs).catch(() => {});
+  }, [id, applyServer]);
+
+  // Retour sur l'onglet : on recharge l'état du projet (il a pu changer ailleurs).
+  useEffect(() => {
+    const onFocus = () => api.project(id).then((p) => applyServer(p, false)).catch(() => {});
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [id, applyServer]);
 
   const loadStyles = useCallback(() => api.styles().then(setStyles).catch(() => {}), []);
@@ -113,6 +126,7 @@ export const Editor = ({ id }: { id: string }) => {
   const save = useCallback(() => {
     if (!dirty.current) return saving.current;
     dirty.current = false;
+    inFlight.current = true;
     setSaveState("saving");
     saving.current = api
       .update(id, { name, style, overrides, settings, ...(words ? { words } : {}) })
@@ -120,7 +134,8 @@ export const Editor = ({ id }: { id: string }) => {
         setProject((cur) => (cur ? { ...cur, renders: p.renders, updatedAt: p.updatedAt } : p));
         setSaveState(dirty.current ? "saving" : "saved");
       })
-      .catch(() => setSaveState("error"));
+      .catch(() => setSaveState("error"))
+      .finally(() => (inFlight.current = false));
     return saving.current;
   }, [id, name, style, overrides, settings, words]);
 
@@ -203,9 +218,25 @@ export const Editor = ({ id }: { id: string }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, project?.preview, edit, words, style, overrides, previewDef, designer]);
 
+  // Un préréglage s'applique tel qu'il est conçu (celui de sa vignette) : les ajustements
+  // rapides du style précédent (taille, accent, mots par écran…) sont remis à zéro.
   const pickStyle = (name: string) => {
+    if (name === style) return;
     setStyle(name);
+    setOverrides({});
     markDirty();
+  };
+
+  // Configuration enregistrée : style, ajustements, coupes et dossier de sortie d'un coup.
+  const applyConfigHere = async (configName: string) => {
+    await save();
+    await saving.current;
+    try {
+      await api.bulk([id], { config: configName });
+      applyServer(await api.project(id), false);
+    } catch (e) {
+      alert((e as Error).message);
+    }
   };
 
   const saveDesign = async () => {
@@ -487,6 +518,23 @@ export const Editor = ({ id }: { id: string }) => {
 
           {tab === "style" && !designer && (
             <div className="tab-body">
+              {configs.length > 0 && (
+                <label className="d-row config-row">
+                  <span className="mono label small">Configuration</span>
+                  <select
+                    className="field select small-field"
+                    value=""
+                    onChange={(e) => e.target.value && applyConfigHere(e.target.value)}
+                  >
+                    <option value="">{project.config ? `Appliquer… (dernière : ${project.config})` : "Appliquer…"}</option>
+                    {configs.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name} · {c.style}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button
                 className="btn primary wide design-btn"
                 onClick={() => {
@@ -987,6 +1035,13 @@ const OutputFolder = ({ value, onChange }: { value?: string; onChange: (dir: str
   );
 };
 
+// Même règle que le serveur (core/media.ts, renderSource) : petit côté ramené à 1080 px.
+const outputSize = ({ width, height }: { width: number; height: number }) => {
+  const k = Math.min(1, 1080 / Math.min(width, height));
+  const even = (v: number) => Math.round((v * k) / 2) * 2;
+  return `${even(width)}×${even(height)}`;
+};
+
 const ExportTab = ({
   project,
   canExport,
@@ -1004,7 +1059,7 @@ const ExportTab = ({
 }) => (
   <div className="tab-body">
     <div className="export-hero">
-      <span className="mono label small">MP4 · H.264 · {project.media.width}×{project.media.height}</span>
+      <span className="mono label small">MP4 · H.264 · {outputSize(project.media)}</span>
       <p className="big">
         {formatTime(outMs)} <span className="thin">à exporter</span>
       </p>

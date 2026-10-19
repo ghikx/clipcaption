@@ -8,6 +8,22 @@ const LANGS = [
   { value: "en", label: "EN" },
 ];
 
+// Préférences de la zone d'envoi, gardées d'une visite à l'autre (si le navigateur le permet).
+const pref = (key: string, fallback: string) => {
+  try {
+    return localStorage.getItem(`clipcaption.${key}`) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+const setPref = (key: string, value: string) => {
+  try {
+    localStorage.setItem(`clipcaption.${key}`, value);
+  } catch {
+    /* navigation privée */
+  }
+};
+
 const isVideo = (f: File) => f.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name);
 
 export const Home = () => {
@@ -17,7 +33,21 @@ export const Home = () => {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const refresh = useCallback(() => api.projects().then(setProjects).catch((e) => setError(e.message)), []);
+  const refresh = useCallback(
+    () =>
+      api
+        .projects()
+        .then((list) => {
+          setProjects(list);
+          // Les projets supprimés (ici, par Claude ou ailleurs) sortent de la sélection.
+          setSelected((s) => {
+            const ids = new Set(list.map((p) => p.id));
+            return [...s].every((id) => ids.has(id)) ? s : new Set([...s].filter((id) => ids.has(id)));
+          });
+        })
+        .catch((e) => setError(e.message)),
+    [],
+  );
 
   useEffect(() => {
     refresh();
@@ -83,12 +113,17 @@ export const Home = () => {
           <span className="mono label">Projets</span>
           <span className="mono muted">{projects?.length ?? 0}</span>
           {!!projects?.length && (
-            <button
-              className="chip ghost select-all"
-              onClick={() => setSelected(selected.size === projects.length ? new Set() : new Set(projects.map((p) => p.id)))}
-            >
-              {selected.size === projects.length ? "Tout désélectionner" : "Tout sélectionner"}
-            </button>
+            <label className="select-all">
+              <input
+                type="checkbox"
+                checked={selected.size === projects.length}
+                ref={(el) => {
+                  if (el) el.indeterminate = selected.size > 0 && selected.size < projects.length;
+                }}
+                onChange={() => setSelected(selected.size === projects.length ? new Set() : new Set(projects.map((p) => p.id)))}
+              />
+              <span className="mono small">Tout sélectionner</span>
+            </label>
           )}
         </div>
         {selected.size > 0 && projects && (
@@ -96,9 +131,7 @@ export const Home = () => {
             ids={[...selected]}
             projects={projects}
             configs={configs}
-            onDone={() => {
-              refresh();
-            }}
+            onDone={refresh}
             onClear={() => setSelected(new Set())}
           />
         )}
@@ -107,7 +140,14 @@ export const Home = () => {
         )}
         <div className="grid">
           {projects?.map((p) => (
-            <ProjectCard key={p.id} p={p} selected={selected.has(p.id)} onToggle={() => toggle(p.id)} onDeleted={refresh} />
+            <ProjectCard
+              key={p.id}
+              p={p}
+              selected={selected.has(p.id)}
+              selecting={selected.size > 0}
+              onToggle={() => toggle(p.id)}
+              onDeleted={refresh}
+            />
           ))}
         </div>
       </section>
@@ -125,9 +165,13 @@ export const Home = () => {
 type UploadRow = { name: string; progress: number; state: "waiting" | "sending" | "done" | "error"; error?: string };
 
 const Uploader = ({ configs, onSingle, onMany }: { configs: ConfigInfo[]; onSingle: (id: string) => void; onMany: () => void }) => {
-  const [lang, setLang] = useState("fr");
-  const [config, setConfig] = useState("chenek");
-  const [autoExport, setAutoExport] = useState(true);
+  const [lang, setLangState] = useState(() => pref("lang", "fr"));
+  const [config, setConfigState] = useState(() => pref("config", "chenek"));
+  // Désactivé par défaut : l'export ne part que si on le demande.
+  const [autoExport, setAutoExportState] = useState(() => pref("autoExport", "false") === "true");
+  const setLang = (v: string) => (setLangState(v), setPref("lang", v));
+  const setConfig = (v: string) => (setConfigState(v), setPref("config", v));
+  const setAutoExport = (v: boolean) => (setAutoExportState(v), setPref("autoExport", String(v)));
   const [drag, setDrag] = useState(false);
   const [rows, setRows] = useState<UploadRow[]>([]);
   const [driveUrl, setDriveUrl] = useState("");
@@ -136,8 +180,9 @@ const Uploader = ({ configs, onSingle, onMany }: { configs: ConfigInfo[]; onSing
   const input = useRef<HTMLInputElement>(null);
   const sending = rows.some((r) => r.state === "waiting" || r.state === "sending");
 
+  // Configuration retenue qui n'existe plus : on revient à la première. « Aucune » ("") reste un choix valable.
   useEffect(() => {
-    if (configs.length && !configs.some((c) => c.name === config)) setConfig(configs[0].name);
+    if (config && configs.length && !configs.some((c) => c.name === config)) setConfigState(configs[0].name);
   }, [configs, config]);
 
   // Envoi une par une : chaque vidéo devient un projet, transcrit (et exporté si coché).
@@ -171,8 +216,10 @@ const Uploader = ({ configs, onSingle, onMany }: { configs: ConfigInfo[]; onSing
     setError(null);
     setDriveBusy(true);
     try {
-      const p = await api.importDrive(driveUrl.trim(), lang);
-      onSingle(p.id);
+      const p = await api.importDrive(driveUrl.trim(), lang, { config, autoExport });
+      setDriveUrl("");
+      if (autoExport) onMany();
+      else onSingle(p.id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -308,13 +355,19 @@ const BulkBar = ({
   const chosen = projects.filter((p) => ids.includes(p.id));
   const withExport = chosen.filter((p) => p.renders.length > 0);
 
-  const run = async (action?: "export") => {
+  const run = async (action?: "export" | "delete") => {
+    if (action === "delete" && !confirm(`Supprimer ${ids.length > 1 ? `ces ${ids.length} projets` : "ce projet"} et leurs exports ? Les copies déjà enregistrées dans tes dossiers de sortie sont gardées.`)) return;
     setBusy(true);
     setMessage(null);
     try {
       const res = await api.bulk(ids, { action, config: config || undefined });
       const errors = res.filter((r) => r.error);
       const later = res.filter((r) => r.queued).length;
+      if (action === "delete" && !errors.length) {
+        onClear();
+        onDone();
+        return;
+      }
       setMessage(
         errors.length
           ? `${errors.length} erreur(s) : ${errors[0].error}`
@@ -366,7 +419,10 @@ const BulkBar = ({
       <button className="btn small" disabled={!withExport.length} onClick={downloadAll} title="Dernier export de chaque projet">
         Télécharger ({withExport.length})
       </button>
-      <button className="chip ghost" onClick={onClear}>
+      <button className="btn small danger" disabled={busy} onClick={() => run("delete")}>
+        Supprimer
+      </button>
+      <button className="chip ghost" onClick={onClear} title="Annuler la sélection">
         ✕
       </button>
       {message && <p className="muted small bulk-msg">{message}</p>}
@@ -374,11 +430,32 @@ const BulkBar = ({
   );
 };
 
-const ProjectCard = ({ p, selected, onToggle, onDeleted }: { p: ProjectSummary; selected: boolean; onToggle: () => void; onDeleted: () => void }) => {
+const ProjectCard = ({
+  p,
+  selected,
+  selecting,
+  onToggle,
+  onDeleted,
+}: {
+  p: ProjectSummary;
+  selected: boolean;
+  selecting: boolean;
+  onToggle: () => void;
+  onDeleted: () => void;
+}) => {
   const busy = isBusy(p);
   const last = p.renders[0];
   return (
-    <a className={`project-card ${selected ? "selected" : ""}`} href={`#/p/${p.id}`}>
+    <a
+      className={`project-card ${selected ? "selected" : ""}`}
+      href={`#/p/${p.id}`}
+      // Pendant une sélection, un clic sur la carte la (dé)sélectionne au lieu de l'ouvrir.
+      onClick={(e) => {
+        if (!selecting) return;
+        e.preventDefault();
+        onToggle();
+      }}
+    >
       <div className="thumb">
         <img src={mediaUrl(p.id, "thumb.jpg")} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.opacity = "0")} />
         <button
@@ -386,6 +463,7 @@ const ProjectCard = ({ p, selected, onToggle, onDeleted }: { p: ProjectSummary; 
           title="Sélectionner"
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             onToggle();
           }}
         >
@@ -415,6 +493,7 @@ const ProjectCard = ({ p, selected, onToggle, onDeleted }: { p: ProjectSummary; 
           title="Télécharger le dernier export"
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             const a = document.createElement("a");
             a.href = mediaUrl(p.id, last.file);
             a.download = `${p.name}.sous-titres.mp4`;
@@ -431,6 +510,7 @@ const ProjectCard = ({ p, selected, onToggle, onDeleted }: { p: ProjectSummary; 
         title="Supprimer"
         onClick={async (e) => {
           e.preventDefault();
+          e.stopPropagation();
           if (confirm(`Supprimer « ${p.name} » et ses exports ?`)) {
             await api.remove(p.id);
             onDeleted();
