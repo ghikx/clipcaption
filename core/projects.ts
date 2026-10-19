@@ -147,19 +147,28 @@ export const createProject = async (
 export const deleteProject = (id: string) => fs.rmSync(projectDir(id), { recursive: true, force: true });
 
 // Génère le proxy d'aperçu en arrière-plan, une seule fois par projet et par processus.
+// Un aperçu à la fois : avec 10 vidéos envoyées d'un coup, 10 encodages en parallèle
+// (en plus de la transcription) faisaient chauffer la machine pour rien.
 const previewsInProgress = new Set<string>();
+let previewQueue: Promise<unknown> = Promise.resolve();
 export const ensurePreview = (id: string) => {
   const p = getProject(id);
   if (!p || p.preview || previewsInProgress.has(id)) return;
   previewsInProgress.add(id);
-  const tmp = path.join(projectDir(id), "preview.tmp.webm");
-  makePreview(sourcePath(p), tmp)
-    .then(() => {
-      fs.renameSync(tmp, path.join(projectDir(id), "preview.webm"));
+  previewQueue = previewQueue
+    .then(async () => {
+      const current = getProject(id);
+      if (!current || current.preview) return; // supprimé ou déjà fait entre-temps
+      const tmp = path.join(projectDir(id), "preview.tmp");
+      const ext = await makePreview(sourcePath(current), tmp);
+      const file = `preview.${ext}`;
+      fs.renameSync(`${tmp}.${ext}`, path.join(projectDir(id), file));
       updateProject(id, (proj) => {
-        proj.preview = "preview.webm";
+        proj.preview = file;
       });
     })
-    .catch((e) => console.error(`[aperçu ${id}]`, e instanceof Error ? e.message : e))
+    .catch((e) => {
+      if (getProject(id)) console.error(`[aperçu ${id}]`, e instanceof Error ? e.message : e);
+    })
     .finally(() => previewsInProgress.delete(id));
 };

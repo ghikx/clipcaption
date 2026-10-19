@@ -49,16 +49,35 @@ export const extractWav = (input: string, output: string) =>
 export const thumbnail = (input: string, output: string, atSeconds = 1) =>
   run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(atSeconds), "-i", input, "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", output]);
 
-// Proxy d'aperçu pour l'interface : VP9 ≤ 960 px, lisible par tous les navigateurs
-// (contrairement au HEVC des iPhone ou au ProRes). Le rendu final utilise la source.
-export const makePreview = (input: string, output: string) =>
-  run("ffmpeg", [
+// Proxy d'aperçu pour l'interface (≤ 960 px). Le rendu final ne l'utilise pas.
+// Sur Mac : H.264 encodé par la puce vidéo (VideoToolbox), presque sans charge processeur ;
+// Chrome et Safari le lisent. Ailleurs, ou si VideoToolbox échoue : VP9, lisible partout
+// mais encodé par le processeur. Renvoie l'extension produite.
+const PREVIEW_SCALE = "scale='if(gt(iw,ih),min(960,iw),-2)':'if(gt(iw,ih),-2,min(960,ih))'";
+export const makePreview = async (input: string, outputBase: string): Promise<"mp4" | "webm"> => {
+  if (process.platform === "darwin") {
+    try {
+      await run("ffmpeg", [
+        "-y", "-loglevel", "error", "-hwaccel", "videotoolbox", "-i", input,
+        "-vf", `${PREVIEW_SCALE},format=yuv420p`,
+        "-c:v", "h264_videotoolbox", "-b:v", "2500k",
+        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+        `${outputBase}.mp4`,
+      ]);
+      return "mp4";
+    } catch {
+      // ffmpeg sans VideoToolbox : on passe au VP9.
+    }
+  }
+  await run("ffmpeg", [
     "-y", "-loglevel", "error", "-i", input,
-    "-vf", "scale='if(gt(iw,ih),min(960,iw),-2)':'if(gt(iw,ih),-2,min(960,ih))'",
-    "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-row-mt", "1", "-b:v", "1500k",
+    "-vf", PREVIEW_SCALE,
+    "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-row-mt", "1", "-threads", "4", "-b:v", "1500k",
     "-c:a", "libopus", "-b:a", "96k",
-    output,
+    `${outputBase}.webm`,
   ]);
+  return "webm";
+};
 
 type StreamInfo = { codec_name?: string; pix_fmt?: string; color_transfer?: string };
 
@@ -93,25 +112,38 @@ export const renderSource = async (input: string, output: string, media: MediaIn
       ...(fast ? [`fps=${media.fps / 2}`] : []),
     ];
     const tonemap = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv";
-    const encode = (vf: string[]) =>
+    const mac = process.platform === "darwin";
+    // Sur Mac, encodage par la puce vidéo (VideoToolbox) : le processeur reste froid. Débit
+    // élevé (copie intermédiaire, pas le fichier final) pour ne rien perdre.
+    const codecs = mac
+      ? [["-c:v", "h264_videotoolbox", "-b:v", "24M"], ["-c:v", "libx264", "-preset", "veryfast", "-crf", "12"]]
+      : [["-c:v", "libx264", "-preset", "veryfast", "-crf", "12"]];
+    const encode = (vf: string[], codec: string[]) =>
       run("ffmpeg", [
         "-y", "-loglevel", "error",
         // Décodage matériel du HEVC sur Mac (ffmpeg revient au logiciel s'il échoue).
-        ...(process.platform === "darwin" ? ["-hwaccel", "videotoolbox"] : []),
+        ...(mac ? ["-hwaccel", "videotoolbox"] : []),
         "-i", input,
         "-vf", [...vf, "format=yuv420p"].join(","),
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "12",
+        ...codec,
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
         "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart",
         `${output}.part.mp4`,
       ]);
-    try {
-      await encode(hdr ? [...filters, tonemap] : filters);
-    } catch (e) {
-      // ffmpeg sans zscale (zimg) : on convertit sans conversion HDR plutôt que d'échouer.
-      if (!hdr) throw e;
-      await encode(filters);
+    // Essais du plus léger au plus sûr : conversion HDR puis sans (ffmpeg sans zscale),
+    // encodeur matériel puis logiciel.
+    const attempts = (hdr ? [[...filters, tonemap], filters] : [filters]).flatMap((vf) => codecs.map((c) => [vf, c] as const));
+    let lastError: unknown;
+    for (const [vf, codec] of attempts) {
+      try {
+        await encode(vf, codec);
+        lastError = undefined;
+        break;
+      } catch (e) {
+        lastError = e;
+      }
     }
+    if (lastError) throw lastError;
     fs.renameSync(`${output}.part.mp4`, output);
   }
   const m = await probe(output);
