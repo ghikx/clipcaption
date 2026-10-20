@@ -20,6 +20,7 @@ export const configSchema = z.object({
   position: z.number().min(0.05).max(0.95).optional(),
   maxWords: z.number().int().min(1).max(12).optional(),
   uppercase: z.boolean().optional(),
+  animation: z.enum(["pop", "bounce", "fade", "slide-up", "blur", "none"]).optional().describe("Effet d'entrée des mots : pop (celui de « Un mot à la fois »), bounce, fade, slide-up, blur, none"),
   outputDir: z.string().max(500).optional().describe("Dossier où déposer les MP4 finis (ex. dossier Google Drive)"),
 });
 
@@ -97,7 +98,7 @@ export const configToProject = (c: Config) => ({
   lang: c.lang,
   settings: { cutSilences: c.cutSilences, minSilenceMs: c.minSilenceMs },
   overrides: Object.fromEntries(
-    Object.entries({ accent: c.accent, sizeScale: c.sizeScale, position: c.position, maxWords: c.maxWords, uppercase: c.uppercase }).filter(
+    Object.entries({ accent: c.accent, sizeScale: c.sizeScale, position: c.position, maxWords: c.maxWords, uppercase: c.uppercase, animation: c.animation }).filter(
       ([, v]) => v !== undefined,
     ),
   ),

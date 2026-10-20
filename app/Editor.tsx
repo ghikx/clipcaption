@@ -609,6 +609,21 @@ export const Editor = ({ id }: { id: string }) => {
                   ))}
                 </div>
               </div>
+              <label className="d-row">
+                <span className="mono label small">Effet d'entrée</span>
+                <select
+                  className="field select small-field"
+                  value={overrides.animation ?? ""}
+                  onChange={(e) => setOv({ animation: (e.target.value || undefined) as StyleOverrides["animation"] })}
+                >
+                  <option value="">Celui du style ({ANIMATION_LABELS[currentDef.animation ?? "pop"]})</option>
+                  {Object.entries(ANIMATION_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 className="btn ghost small"
                 onClick={() => {
@@ -1036,6 +1051,15 @@ const OutputFolder = ({ value, onChange }: { value?: string; onChange: (dir: str
 };
 
 // Même règle que le serveur (core/media.ts, renderSource) : petit côté ramené à 1080 px.
+const ANIMATION_LABELS: Record<NonNullable<StyleOverrides["animation"]>, string> = {
+  pop: "Pop (comme Un mot à la fois)",
+  bounce: "Rebond",
+  fade: "Fondu",
+  "slide-up": "Glisse vers le haut",
+  blur: "Flou qui se précise",
+  none: "Aucun",
+};
+
 const outputSize = ({ width, height }: { width: number; height: number }) => {
   const k = Math.min(1, 1080 / Math.min(width, height));
   const even = (v: number) => Math.round((v * k) / 2) * 2;

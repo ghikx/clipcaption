@@ -418,6 +418,7 @@ server.registerTool(
       size_scale: z.number().min(0.5).max(2).optional().describe("Taille du texte, 1 = normal"),
       position: z.number().min(0.1).max(0.95).optional().describe("Position verticale, 0 = haut, 1 = bas"),
       max_words: z.number().int().min(1).max(8).optional().describe("Mots par écran"),
+      animation: z.enum(["pop", "bounce", "fade", "slide-up", "blur", "none"]).optional().describe("Effet d'entrée des mots : pop (celui de « Un mot à la fois »), bounce, fade, slide-up, blur, none"),
       cut_silences: z.boolean().optional(),
       min_silence_ms: z.number().int().min(100).max(3000).optional(),
       cut_ranges: z.array(range).optional().describe("Plages [début, fin] d'index de mots à couper"),
@@ -436,6 +437,7 @@ server.registerTool(
     if (a.size_scale !== undefined) o.sizeScale = a.size_scale;
     if (a.position !== undefined) o.position = a.position;
     if (a.max_words !== undefined) o.maxWords = a.max_words;
+    if (a.animation !== undefined) o.animation = a.animation;
     p.overrides = o;
     if (a.cut_silences !== undefined) p.settings.cutSilences = a.cut_silences;
     if (a.min_silence_ms !== undefined) p.settings.minSilenceMs = a.min_silence_ms;

@@ -475,6 +475,8 @@ export type StyleOverrides = {
   position?: number;
   uppercase?: boolean;
   maxWords?: number;
+  // Effet d'entrée des mots (ex. « pop » = celui de « Un mot à la fois »).
+  animation?: Animation;
 };
 
 export const applyOverrides = (s: CaptionStyle, o: StyleOverrides | undefined): CaptionStyle => {
@@ -499,6 +501,7 @@ export const applyOverrides = (s: CaptionStyle, o: StyleOverrides | undefined): 
     // Plus de mots par écran = fenêtre de regroupement plus longue.
     out.combineWithinMs = o.maxWords === 1 ? 0 : Math.max(s.combineWithinMs, o.maxWords * 320);
   }
+  if (o.animation) out.animation = o.animation;
   return out;
 };
 
