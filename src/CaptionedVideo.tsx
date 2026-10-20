@@ -60,12 +60,19 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captio
       {videoSrc ? <Footage src={/^https?:/.test(videoSrc) ? videoSrc : staticFile(videoSrc)} segments={segments} /> : null}
       {pages.map((page, i) => {
         const next = pages[i + 1];
-        const startFrame = Math.floor((page.startMs / 1000) * fps);
+        const frameOf = (ms: number) => Math.floor((ms / 1000) * fps);
+        const startFrame = frameOf(page.startMs);
         // Un écran reste affiché jusqu'au suivant, sans dépasser 1,5 s après son dernier mot,
         // et disparaît dès qu'un mot masqué est prononcé (sinon il resterait à sa place).
+        // Les bornes passent par le même arrondi que le début de l'écran suivant : arrondir la
+        // fin au-dessus faisait cohabiter deux écrans pendant une image, d'où des sous-titres
+        // superposés qui clignotaient aux changements d'écran.
         const hidden = hiddenStarts.find((ms) => ms >= page.endMs);
-        const endMs = Math.min(next ? next.startMs : Infinity, page.endMs + 1500, hidden ?? Infinity);
-        const endFrame = Math.ceil((endMs / 1000) * fps);
+        const endFrame = Math.min(
+          next ? frameOf(next.startMs) : Infinity,
+          Math.ceil(((page.endMs + 1500) / 1000) * fps),
+          hidden !== undefined ? frameOf(hidden) : Infinity,
+        );
         if (endFrame <= startFrame) return null;
         return (
           <Sequence key={i} from={startFrame} durationInFrames={endFrame - startFrame} layout="none">
