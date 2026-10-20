@@ -395,7 +395,7 @@ server.registerTool(
     if (!p.words) return text(`Pas encore de transcription (statut : ${p.status}).`);
     const lines = p.words.map((w, i) => {
       const t = w.text.trim();
-      const shown = w.cut ? `~~${t}~~` : w.emphasis ? `*${t}*` : t;
+      const shown = w.cut ? `~~${t}~~` : w.hidden ? `(${t})` : w.emphasis ? `*${t}*` : t;
       return `[${i}] ${shown} (${(w.startMs / 1000).toFixed(2)} s)`;
     });
     return text(lines.join("\n"));
@@ -423,6 +423,8 @@ server.registerTool(
       min_silence_ms: z.number().int().min(100).max(3000).optional(),
       cut_ranges: z.array(range).optional().describe("Plages [début, fin] d'index de mots à couper"),
       restore_ranges: z.array(range).optional().describe("Plages [début, fin] d'index de mots à restaurer"),
+      hide_ranges: z.array(range).optional().describe("Plages [début, fin] d'index de mots à retirer des sous-titres seulement (la vidéo reste intacte)"),
+      unhide_ranges: z.array(range).optional().describe("Plages [début, fin] d'index de mots masqués à réafficher"),
       emphasize: z.array(z.number().int()).optional(),
       deemphasize: z.array(z.number().int()).optional(),
       replace_text: z.array(z.object({ index: z.number().int(), text: z.string() })).optional(),
@@ -449,6 +451,8 @@ server.registerTool(
         });
       each(a.cut_ranges, (i) => (words[i].cut = true));
       each(a.restore_ranges, (i) => (words[i].cut = false));
+      each(a.hide_ranges, (i) => (words[i].hidden = true));
+      each(a.unhide_ranges, (i) => (words[i].hidden = false));
       a.emphasize?.forEach((i) => words[i] && (words[i].emphasis = true));
       a.deemphasize?.forEach((i) => words[i] && (words[i].emphasis = false));
       // Garde l'espace de tête, qui sépare les mots dans les sous-titres.

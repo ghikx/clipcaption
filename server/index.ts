@@ -217,11 +217,11 @@ app.patch(
     }
     if (Array.isArray(b.words) && p.words) {
       // Le nombre de mots et leurs timestamps viennent de la transcription : on n'accepte
-      // que le texte, les coupes et les mises en avant.
+      // que le texte, les coupes, les mots masqués et les mises en avant.
       if (b.words.length !== p.words.length) throw new Error("Transcription modifiée entre-temps, recharge la page.");
       p.words = p.words.map((w, i): Word => {
         const n = b.words![i];
-        return { ...w, text: typeof n.text === "string" ? n.text : w.text, cut: Boolean(n.cut), emphasis: Boolean(n.emphasis) };
+        return { ...w, text: typeof n.text === "string" ? n.text : w.text, cut: Boolean(n.cut), hidden: Boolean(n.hidden), emphasis: Boolean(n.emphasis) };
       });
     }
     res.json(saveProject(p));

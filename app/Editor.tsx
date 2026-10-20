@@ -293,6 +293,11 @@ export const Editor = ({ id }: { id: string }) => {
     const allCut = words.slice(range[0], range[1] + 1).every((w) => w.cut);
     changeWords((ws) => ws.map((w, i) => (i >= range[0] && i <= range[1] ? { ...w, cut: !allCut } : w)));
   }, [range, words, changeWords]);
+  const toggleHidden = useCallback(() => {
+    if (!range || !words) return;
+    const all = words.slice(range[0], range[1] + 1).every((w) => w.hidden);
+    changeWords((ws) => ws.map((w, i) => (i >= range[0] && i <= range[1] ? { ...w, hidden: !all } : w)));
+  }, [range, words, changeWords]);
   const toggleEmphasis = useCallback(() => {
     if (!range || !words) return;
     const all = words.slice(range[0], range[1] + 1).every((w) => w.emphasis);
@@ -300,7 +305,10 @@ export const Editor = ({ id }: { id: string }) => {
   }, [range, words, changeWords]);
   const editText = useCallback(
     (i: number, text: string) =>
-      changeWords((ws) => ws.map((w, j) => (j === i ? { ...w, text: (i === 0 ? "" : " ") + text.trim() } : w))),
+      // Un mot vidé est masqué des sous-titres, comme avec H ; la vidéo reste intacte.
+      changeWords((ws) =>
+        ws.map((w, j) => (j !== i ? w : text.trim() ? { ...w, text: (i === 0 ? "" : " ") + text.trim() } : { ...w, hidden: true })),
+      ),
     [changeWords],
   );
 
@@ -321,6 +329,8 @@ export const Editor = ({ id }: { id: string }) => {
         toggleCut();
       } else if (e.key.toLowerCase() === "e" && !mod) {
         toggleEmphasis();
+      } else if (e.key.toLowerCase() === "h" && !mod) {
+        toggleHidden();
       } else if (e.key === "Escape") {
         setSelection(null);
       } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && words) {
@@ -333,7 +343,7 @@ export const Editor = ({ id }: { id: string }) => {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [undo, redo, toggleCut, toggleEmphasis, words, range, activeIndex, seekSource]);
+  }, [undo, redo, toggleCut, toggleHidden, toggleEmphasis, words, range, activeIndex, seekSource]);
 
   const exportNow = async () => {
     setTab("export");
@@ -452,6 +462,9 @@ export const Editor = ({ id }: { id: string }) => {
                     <button className="chip" onClick={toggleCut}>
                       {words.slice(range[0], range[1] + 1).every((w) => w.cut) ? "Restaurer" : "Couper"} <kbd>⌫</kbd>
                     </button>
+                    <button className="chip" onClick={toggleHidden} title="Retire le texte des sous-titres, sans couper la vidéo">
+                      {words.slice(range[0], range[1] + 1).every((w) => w.hidden) ? "Afficher" : "Masquer"} <kbd>H</kbd>
+                    </button>
                     <button className="chip" onClick={toggleEmphasis}>
                       Mettre en avant <kbd>E</kbd>
                     </button>
@@ -483,7 +496,7 @@ export const Editor = ({ id }: { id: string }) => {
                 onEditText={editText}
               />
               <p className="hint mono muted small">
-                Clic : aller au mot · glisser : sélectionner · double-clic : corriger · ⌫ couper · E mettre en avant · espace
+                Clic : aller au mot · glisser : sélectionner · double-clic : corriger (vider = masquer) · ⌫ couper la vidéo · H masquer le texte · E mettre en avant · espace
                 lecture
               </p>
             </>
@@ -774,7 +787,7 @@ const Transcript = memo(
         {words.map((w, i) => {
           const breakBefore = i > 0 && w.startMs - words[i - 1].endMs > 1200;
           const selected = selection && i >= selection[0] && i <= selection[1];
-          const cls = ["w", w.cut && "cut", w.emphasis && "em", i === activeIndex && "active", selected && "sel"].filter(Boolean).join(" ");
+          const cls = ["w", w.cut && "cut", w.hidden && "hidden", w.emphasis && "em", i === activeIndex && "active", selected && "sel"].filter(Boolean).join(" ");
           return (
             <span key={i}>
               {breakBefore && <span className="para" />}
@@ -785,7 +798,7 @@ const Transcript = memo(
                   defaultValue={w.text.trim()}
                   size={Math.max(3, w.text.trim().length + 1)}
                   onBlur={(e) => {
-                    if (e.target.value.trim()) onEditText(i, e.target.value);
+                    if (e.target.value.trim() !== w.text.trim()) onEditText(i, e.target.value);
                     setEditing(null);
                   }}
                   onKeyDown={(e) => {

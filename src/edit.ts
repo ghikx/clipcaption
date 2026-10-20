@@ -70,5 +70,7 @@ export const buildEdit = (words: Word[], settings: EditSettings, totalMs: number
     ? computeSegments(kept, { minGapMs: Math.max(0, settings.minSilenceMs - 2 * PAD_MS), padMs: PAD_MS, totalMs })
     : [{ fromMs: 0, toMs: totalMs }];
   const segments = snapToFrames(subtract(base, cutRanges(words, totalMs)), fps);
+  // Les mots masqués restent dans `captions` : CaptionedVideo ne les affiche pas mais s'en
+  // sert pour retirer l'écran précédent pendant qu'ils sont prononcés.
   return { captions: kept, segments, durationInFrames: Math.max(1, framesOf(segments, fps)) };
 };

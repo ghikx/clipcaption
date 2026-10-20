@@ -148,7 +148,7 @@ export const renderStyleStill = async (o: {
   const media = o.project?.media ?? { width: 1080, height: 1920, fps: 30, durationMs: (sample[sample.length - 1]?.endMs ?? 8000) + 800 };
   const settings = o.project?.settings ?? { cutSilences: false, minSilenceMs: 500 };
   const edit = buildEdit(words, settings, media.durationMs, media.fps);
-  const kept = edit.captions;
+  const kept = edit.captions.filter((w) => !w.hidden);
   // Un mot important au-delà du premier écran, sinon un mot vers le tiers.
   const shown = kept.find((w) => w.emphasis && w.startMs > 1500) ?? kept[Math.floor(kept.length / 3)];
   const atMs = shown ? (shown.startMs + shown.endMs) / 2 : 0;

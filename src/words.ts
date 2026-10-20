@@ -3,7 +3,8 @@ import type { Caption } from "@remotion/captions";
 // Un mot transcrit. `emphasis` marque les mots importants (mis en avant par les styles
 // keyword, aesthetic, chaos…) : calculé automatiquement, modifiable à la main.
 // `cut` retire le mot des sous-titres et son passage de la vidéo.
-export type Word = Caption & { emphasis?: boolean; cut?: boolean };
+// `hidden` retire seulement le mot des sous-titres : la vidéo reste intacte.
+export type Word = Caption & { emphasis?: boolean; cut?: boolean; hidden?: boolean };
 
 export type Page = { startMs: number; endMs: number; words: Word[] };
 

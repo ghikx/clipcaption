@@ -853,6 +853,38 @@ kbd {
   padding: 18px 20px;
 }
 
+/* Hauteur fixe : la barre de sélection qui remplace ↶ ↷ au premier clic ne doit pas
+   décaler le texte, sinon le second clic d'un double-clic tombe sur un autre mot. */
+.transcript-panel .panel-head {
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.transcript-panel .panel-head .label {
+  white-space: nowrap;
+}
+
+.transcript-panel .toolbar {
+  min-width: 0;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}
+
+/* Colonne étroite : on retire le compteur et les raccourcis pour garder la barre sur une ligne. */
+.transcript-panel {
+  container-type: inline-size;
+}
+
+@container (max-width: 620px) {
+  .transcript-panel .toolbar kbd,
+  .transcript-panel .toolbar .muted {
+    display: none;
+  }
+  .transcript-panel .toolbar .chip {
+    padding: 5px 9px;
+  }
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -907,6 +939,14 @@ kbd {
   text-decoration: line-through;
   text-decoration-color: rgba(255, 107, 91, 0.8);
   text-decoration-thickness: 2px;
+}
+
+/* Masqué : absent des sous-titres, la vidéo reste intacte. */
+.w.hidden {
+  color: rgba(242, 242, 238, 0.35);
+  text-decoration: line-through dashed;
+  text-decoration-color: rgba(242, 242, 238, 0.45);
+  text-decoration-thickness: 1px;
 }
 
 .w.sel {

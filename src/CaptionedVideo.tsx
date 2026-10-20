@@ -38,14 +38,22 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captio
     [style, styleDef, overrides],
   );
 
-  const pages = useMemo(
-    () =>
-      paginate(segments ? remapCaptions(captions.filter((w) => !w.cut), segments) : captions.filter((w) => !w.cut), {
-        combineWithinMs: s.combineWithinMs,
-        maxWords: s.maxWords,
-      }),
-    [captions, segments, s.combineWithinMs, s.maxWords],
-  );
+  const { pages, hiddenStarts } = useMemo(() => {
+    const kept = captions.filter((w) => !w.cut);
+    const timed = segments ? remapCaptions(kept, segments) : kept;
+    // Un mot masqué coupe le texte en morceaux paginés séparément : un écran ne regroupe
+    // jamais des mots situés de part et d'autre d'un mot masqué.
+    const runs: Word[][] = [[]];
+    for (const w of timed) {
+      if (w.hidden) runs.push([]);
+      else runs[runs.length - 1].push(w);
+    }
+    const options = { combineWithinMs: s.combineWithinMs, maxWords: s.maxWords };
+    return {
+      pages: runs.flatMap((run) => (run.length ? paginate(run, options) : [])),
+      hiddenStarts: timed.filter((w) => w.hidden).map((w) => w.startMs),
+    };
+  }, [captions, segments, s.combineWithinMs, s.maxWords]);
 
   return (
     <AbsoluteFill style={{ background: "linear-gradient(160deg, #1e293b 0%, #0f172a 55%, #312e81 100%)" }}>
@@ -53,8 +61,10 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({ videoSrc, captio
       {pages.map((page, i) => {
         const next = pages[i + 1];
         const startFrame = Math.floor((page.startMs / 1000) * fps);
-        // Un écran reste affiché jusqu'au suivant, sans dépasser 1,5 s après son dernier mot.
-        const endMs = Math.min(next ? next.startMs : Infinity, page.endMs + 1500);
+        // Un écran reste affiché jusqu'au suivant, sans dépasser 1,5 s après son dernier mot,
+        // et disparaît dès qu'un mot masqué est prononcé (sinon il resterait à sa place).
+        const hidden = hiddenStarts.find((ms) => ms >= page.endMs);
+        const endMs = Math.min(next ? next.startMs : Infinity, page.endMs + 1500, hidden ?? Infinity);
         const endFrame = Math.ceil((endMs / 1000) * fps);
         if (endFrame <= startFrame) return null;
         return (
