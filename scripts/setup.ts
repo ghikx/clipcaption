@@ -43,6 +43,19 @@ if (fs.existsSync(WHISPER_PATH) && !fs.existsSync(WHISPER_BINARY)) {
 
 await installWhisperCpp({ to: WHISPER_PATH, version: WHISPER_VERSION });
 
+// Windows : l'archive officielle range l'exécutable (et ses DLL) dans Release/, alors que la
+// transcription le cherche dans build/bin/ comme sur Mac et Linux. On l'y déplace.
+const RELEASE = path.join(WHISPER_PATH, "Release");
+if (process.platform === "win32" && !fs.existsSync(WHISPER_BINARY) && fs.existsSync(RELEASE)) {
+  fs.mkdirSync(path.dirname(WHISPER_BINARY), { recursive: true });
+  for (const f of fs.readdirSync(RELEASE)) fs.renameSync(path.join(RELEASE, f), path.join(path.dirname(WHISPER_BINARY), f));
+  fs.rmSync(RELEASE, { recursive: true, force: true });
+}
+if (!fs.existsSync(WHISPER_BINARY)) {
+  console.error(`\nInstallation de whisper.cpp incomplète : ${WHISPER_BINARY} introuvable. Supprime le dossier ${WHISPER_PATH} et relance.`);
+  process.exit(1);
+}
+
 if (fs.existsSync(KEEP)) {
   for (const f of fs.readdirSync(KEEP)) fs.renameSync(path.join(KEEP, f), path.join(WHISPER_PATH, f));
   fs.rmSync(KEEP, { recursive: true, force: true });

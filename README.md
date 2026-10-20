@@ -17,6 +17,16 @@ Sous-titres animés façon Submagic, 100 % en local, en français et en anglais.
 
 Une fois le projet téléchargé (voir Installation), double-clique sur **`Lancer clipcaption.command`** dans le dossier : il installe ce qui manque au premier lancement, démarre l'outil et ouvre http://localhost:4321 dans le navigateur. Laisse la fenêtre du Terminal ouverte pendant que tu travailles.
 
+## Démarrage rapide (Windows)
+
+Non testé sur une vraie machine Windows : remonte toute erreur.
+
+1. Dans PowerShell : `winget install OpenJS.NodeJS.LTS Gyan.FFmpeg Git.Git`, puis ferme et rouvre PowerShell.
+2. `cd $HOME\Desktop ; git clone https://github.com/ghikx/clipcaption.git`
+3. Double-clique sur **`Lancer clipcaption.bat`** dans le dossier `clipcaption` du Bureau. Le premier lancement installe les dépendances et la transcription (~1,6 Go), puis ouvre http://localhost:4321. Laisse la fenêtre noire ouverte pendant que tu travailles.
+
+Mise à jour : `cd $HOME\Desktop\clipcaption ; git pull`, puis relance le `.bat`. Sur Windows, la transcription tourne sur le processeur (pas de carte graphique) : plus lente que sur un Mac récent ; `npm run setup -- --model small` et `set CLIPCAPTION_MODEL=small` accélèrent au prix d'un peu de précision. Si whisper refuse de démarrer (DLL manquante), installe « Microsoft Visual C++ Redistributable » : `winget install Microsoft.VCRedist.2015+.x64`.
+
 ## Installation (une fois)
 
 ```bash

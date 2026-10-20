@@ -37,7 +37,21 @@ export const downloadFromDrive = async (url: string): Promise<{ file: string; na
 
 // Dossiers Google Drive pour ordinateur (macOS) : ~/Library/CloudStorage/GoogleDrive-<compte>/
 // puis « Mon Drive » / « My Drive » (selon la langue du système), « Drive partagés »…
+// Windows : Google Drive pour ordinateur monte un lecteur (souvent G:) avec « Mon Drive ».
+const windowsDriveRoots = () =>
+  "DEFGHIJKLMNOPQRSTUVWXYZ"
+    .split("")
+    .flatMap((l) => ["Mon Drive", "My Drive"].map((d) => `${l}:\\${d}`))
+    .filter((p) => {
+      try {
+        return fs.existsSync(p);
+      } catch {
+        return false;
+      }
+    });
+
 export const driveRoots = () => {
+  if (process.platform === "win32") return windowsDriveRoots();
   const base = path.join(os.homedir(), "Library", "CloudStorage");
   if (!fs.existsSync(base)) return [];
   return fs
