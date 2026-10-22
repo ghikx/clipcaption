@@ -120,7 +120,7 @@ L'import par lien marche pour un fichier partagé en « Tous les utilisateurs di
 Ajoute le serveur à Claude Code. La commande exacte, avec tes chemins, est affichée en bas de la page d'accueil de l'interface :
 
 ```bash
-claude mcp add clipcaption -- node "/chemin/vers/clipcaption/node_modules/tsx/dist/cli.mjs" "/chemin/vers/clipcaption/core/mcp.ts"
+claude mcp add --scope user clipcaption -- node "/chemin/vers/clipcaption/node_modules/tsx/dist/cli.mjs" "/chemin/vers/clipcaption/core/mcp.ts"
 ```
 
 Pour Claude Desktop, ajoute dans `claude_desktop_config.json` :

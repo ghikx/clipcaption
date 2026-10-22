@@ -76,7 +76,7 @@ app.get("/api/info", (_req, res) => {
     whisper: whisperStatus(model),
     // Chemins absolus : Claude lance le serveur MCP depuis un autre dossier, où `npx tsx`
     // ne trouverait pas tsx (et attendrait une confirmation d'installation).
-    mcpCommand: `claude mcp add clipcaption -- node "${path.join(ROOT, "node_modules", "tsx", "dist", "cli.mjs")}" "${path.join(ROOT, "core", "mcp.ts")}"`,
+    mcpCommand: `claude mcp add --scope user clipcaption -- node "${path.join(ROOT, "node_modules", "tsx", "dist", "cli.mjs")}" "${path.join(ROOT, "core", "mcp.ts")}"`,
   });
 });
 
